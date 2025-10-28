@@ -40,7 +40,8 @@ def main():
 
         # --- Handle 'echo' command ---
         if cmd == "echo":
-            print(parts[1:])
+            echoString = " ".join(parts[1:])
+            print(echoString)
         # PRINT
         print(f"{command}: command not found")
     
