@@ -28,15 +28,15 @@ def main():
         if cmd == "exit":
             #default exit code = 0
             exit_code = 0
-        # If user gave an argument like 'exit 1'
-        if len(parts) > 1:
+            # If user gave an argument like 'exit 1'
+            if len(parts) > 1:
                 try:
                     exit_code = int(parts[1])
                 except ValueError:
                     # If not a valid number, default to 1 (error)
                     exit_code = 1
-        # Exit the shell immediately
-        sys.exit(exit_code)
+            # Exit the shell immediately
+            sys.exit(exit_code)
         # PRINT
         print(f"{command}: command not found")
     
