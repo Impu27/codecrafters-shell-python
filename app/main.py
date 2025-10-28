@@ -37,6 +37,10 @@ def main():
                     exit_code = 1
             # Exit the shell immediately
             sys.exit(exit_code)
+
+        # --- Handle 'echo' command ---
+        if cmd == "echo":
+            print(parts[1:])
         # PRINT
         print(f"{command}: command not found")
     
