@@ -64,7 +64,7 @@ def main():
         if cmd == 'type':
             if len(parts) < 2:
                 continue
-            builtin_commands = ["exit", "echo", "type", "pwd"]
+            builtin_commands = ["exit", "echo", "type", "pwd", "cd"]
             target = parts[1]
             # 1) Check if it's a builtin
             if target in builtin_commands:
@@ -91,6 +91,26 @@ def main():
             current_directory = os.getcwd()
             print(current_directory)
             continue
+
+
+        # --- Handle 'cd' comment ---
+        if cmd == "cd":
+            # Check if argument is provided
+            if len(parts) < 2:
+                # No path given (optional for later stages)
+                # Usually defaults to the home directory, but we’ll skip that for now
+                continue
+            target_dir = parts[1]
+            # Check if the directory exists
+            if not os.path.isdir(target_dir):
+                print(f"cd: {target_dir}: No such file or directory")
+                continue
+            try:
+                os.chdir(target_dir)
+            except Exception as e:
+                print(f"cd: {target_dir}: {e}")
+            continue
+
 
 
          # --- Handle external programs ---
