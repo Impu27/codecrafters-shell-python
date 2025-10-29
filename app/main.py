@@ -1,6 +1,8 @@
 import sys
 import os
 import subprocess
+import shlex
+
 
 """Searches for an executable in all directories listed in PATH.
 Returns the full path if found and executable, otherwise None."""
@@ -32,12 +34,16 @@ def main():
         if command == "":
             # Empty input: just show prompt again
             continue
-        # EVAL
-        #splitting command into words(for handling arguments)
-        parts = command.split()
+        # --- UPDATED: Use shlex for proper quote parsing ---
+        try:
+            parts = shlex.split(command)
+        except ValueError as e:
+            print(f"Error parsing command: {e}")
+            continue
         cmd = parts[0]
 
 
+        # --- Handle builtins ---
         # --- Handle 'exit' command ---
         if cmd == "exit":
             #default exit code = 0
