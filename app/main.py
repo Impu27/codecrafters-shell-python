@@ -24,6 +24,7 @@ def main():
         #splitting command into words(for handling arguments)
         parts = command.split()
         cmd = parts[0]
+
         # --- Handle 'exit' command ---
         if cmd == "exit":
             #default exit code = 0
@@ -43,6 +44,13 @@ def main():
             echoString = " ".join(parts[1:])
             print(echoString)
             continue
+
+        # --- Handle 'type' command ---
+        if cmd == 'type':
+            if cmd == 'type' or 'echo' or 'exit':
+                print(f"{cmd} is a shell builtin")
+            else:
+                print(f"{cmd}: not found")
         # PRINT
         print(f"{command}: command not found")
     
