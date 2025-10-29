@@ -101,17 +101,13 @@ def main():
                 # Usually defaults to the home directory, but we’ll skip that for now
                 continue
             target_dir = parts[1]
+            # Handle '~' expansion first
+            if target_dir == "~" or target_dir.startswith("~/"):
+                target_dir = os.path.expanduser(target_dir)
             # Check if the directory exists
             if not os.path.isdir(target_dir):
                 print(f"cd: {target_dir}: No such file or directory")
                 continue
-            if target_dir == "~":
-                home_directory = os.path.expanduser('~')
-                try:
-                    os.chdir(target_dir)
-                except Exception as e:
-                    print(f"cd: {target_dir}: {e}")
-            continue
             try:
                 os.chdir(target_dir)
             except Exception as e:
