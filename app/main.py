@@ -97,6 +97,11 @@ def main():
             continue
 
 
+        # --- Handle 'pwd' comment ---
+        current_directory = os.getcwd()
+        print(current_directory)
+
+
         # PRINT for Unknown command
         print(f"{command}: command not found")
     
