@@ -64,7 +64,7 @@ def main():
         if cmd == 'type':
             if len(parts) < 2:
                 continue
-            builtin_commands = ["exit", "echo", "type"]
+            builtin_commands = ["exit", "echo", "type", "pwd"]
             target = parts[1]
             # 1) Check if it's a builtin
             if target in builtin_commands:
@@ -86,6 +86,13 @@ def main():
             continue
 
 
+        # --- Handle 'pwd' comment ---
+        if cmd == "pwd":
+            current_directory = os.getcwd()
+            print(current_directory)
+            continue
+
+
          # --- Handle external programs ---
         full_path = find_executable(cmd)
         if full_path:
@@ -95,11 +102,6 @@ def main():
             except Exception as e:
                 print(f"Error executing {cmd}: {e}")
             continue
-
-
-        # --- Handle 'pwd' comment ---
-        current_directory = os.getcwd()
-        print(current_directory)
 
 
         # PRINT for Unknown command
