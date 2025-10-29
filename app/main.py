@@ -1,4 +1,5 @@
 import sys
+import os
 
 
 def main():
@@ -25,6 +26,7 @@ def main():
         parts = command.split()
         cmd = parts[0]
 
+
         # --- Handle 'exit' command ---
         if cmd == "exit":
             #default exit code = 0
@@ -39,11 +41,13 @@ def main():
             # Exit the shell immediately
             sys.exit(exit_code)
 
+
         # --- Handle 'echo' command ---
         if cmd == "echo":
             echoString = " ".join(parts[1:])
             print(echoString)
             continue
+
 
         # --- Handle 'type' command ---
         if cmd == 'type':
@@ -51,12 +55,27 @@ def main():
                 continue
             builtin_commands = ["exit", "echo", "type"]
             target = parts[1]
+            # 1) Check if it's a builtin
             if target in builtin_commands:
                 print(f"{parts[1]} is a shell builtin")
-            else:
+                continue
+
+            # 2️⃣ Otherwise, check in PATH
+            path_dirs = os.environ.get("PATH", "").split(os.pathsep)
+            found = False
+            for directory in path_dirs:
+                full_path = os.path.join(directory, target)
+                if os.path.isfile(full_path) and os.access(full_path, os.X_OK):
+                    print(f"{target} is {full_path}")
+                    found = True
+                    break
+                
+            if not found:
                 print(f"{parts[1]}: not found")
             continue
-        # PRINT
+
+
+        # PRINT for Unknown command
         print(f"{command}: command not found")
     
 
