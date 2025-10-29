@@ -1,5 +1,16 @@
 import sys
 import os
+import subprocess
+
+"""Searches for an executable in all directories listed in PATH.
+Returns the full path if found and executable, otherwise None."""
+def find_executable(program):
+    path_dirs = os.environ.get("PATH", "").split(os.pathsep)
+    for directory in path_dirs:
+        full_path = os.path.join(directory, program)
+        if os.path.isfile(full_path) and os.access(full_path, os.X_OK):
+            return full_path
+    return None
 
 
 def main():
@@ -69,9 +80,20 @@ def main():
                     print(f"{target} is {full_path}")
                     found = True
                     break
-                
+
             if not found:
                 print(f"{parts[1]}: not found")
+            continue
+
+
+         # --- Handle external programs ---
+        full_path = find_executable(cmd)
+        if full_path:
+            try:
+                # Run the external program with its arguments
+                subprocess.run(parts)
+            except Exception as e:
+                print(f"Error executing {cmd}: {e}")
             continue
 
 
