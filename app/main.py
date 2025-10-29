@@ -47,10 +47,10 @@ def main():
 
         # --- Handle 'type' command ---
         if cmd == 'type':
-            if cmd == 'type' or 'echo' or 'exit':
-                print(f"{cmd} is a shell builtin")
+            if parts[1] == 'type' or 'echo' or 'exit':
+                print(f"{parts[1]} is a shell builtin")
             else:
-                print(f"{cmd}: not found")
+                print(f"{parts[1]}: not found")
         # PRINT
         print(f"{command}: command not found")
     
