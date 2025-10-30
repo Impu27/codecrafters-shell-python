@@ -45,6 +45,18 @@ def main():
 
         # --- Handle output redirection early ---
         stdout_redirect = None
+        stderr_redirect = None
+        #Check for stderr
+        if "2>" in parts:
+            op_index = parts.index("2>")
+            if op_index + 1 < len(parts):
+                stderr_redirect = parts[op_index + 1]
+                parts = parts[:op_index] #remove redirection tokens
+            else:
+                print("syntax error: no file after redirection operator")
+                continue
+
+        #Check for stdout
         if ">" in parts or "1>" in parts:
             if "1>" in parts:
                 op_index = parts.index("1>")
@@ -151,13 +163,22 @@ def main():
         full_path = find_executable(cmd)
         if full_path:
             try:
-                # Handle output redirection
-                if stdout_redirect:
-                    with open(stdout_redirect, "w") as f:
-                        subprocess.run(parts, stdout=f, stderr=sys.stderr)
-                else:
-                    # No redirection — normal execution
-                    subprocess.run(parts)
+                # Open files as needed
+                stdout_target = open(stdout_redirect, "w") if stdout_redirect else None
+                stderr_target = open(stderr_redirect, "w") if stderr_redirect else None
+
+                subprocess.run(
+                    parts,
+                    stdout=stdout_target or sys.stdout,
+                    stderr=stderr_target or sys.stderr
+                )
+
+                # Close files if opened
+                if stdout_target:
+                    stdout_target.close()
+                if stderr_target:
+                    stderr_target.close()
+
             except Exception as e:
                 print(f"Error executing {cmd}: {e}")
             continue
