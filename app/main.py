@@ -122,15 +122,37 @@ def main():
 
 
 
-         # --- Handle external programs ---
+        # --- Handle external programs ---
         full_path = find_executable(cmd)
         if full_path:
             try:
-                # Run the external program with its arguments
-                subprocess.run(parts)
+                # Handle output redirection
+                if ">" in parts or "1>" in parts:
+                    if "1>" in parts:
+                        op_index = parts.index("1>")
+                    else:
+                        op_index = parts.index(">")
+
+                    # The token after > or 1> should be the output file path
+                    if op_index + 1 >= len(parts):
+                        print("syntax error: no file after redirection operator")
+                        continue
+
+                    output_file = parts[op_index + 1]
+
+                    # Command before the redirection operator
+                    cmd_args = parts[:op_index]
+
+                    # Open the file for writing (truncate if exists)
+                    with open(output_file, "w") as f:
+                        subprocess.run(cmd_args, stdout=f, stderr=sys.stderr)
+                else:
+                    # No redirection — normal execution
+                    subprocess.run(parts)
             except Exception as e:
                 print(f"Error executing {cmd}: {e}")
             continue
+        
 
 
         # PRINT for Unknown command
