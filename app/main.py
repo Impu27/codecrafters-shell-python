@@ -114,7 +114,7 @@ def main():
             echo_str = " ".join(parts[1:])
             if stdout_redirect:
                 mode = "a" if stdout_append else "w"
-                with open(stdout_redirect, "w") as f:
+                with open(stdout_redirect, mode) as f:
                     f.write(echo_str + "\n")
             else:
                 print(echo_str)
@@ -139,7 +139,7 @@ def main():
                     output = f"{target}: not found"
             if stdout_redirect:
                 mode = "a" if stdout_append else "w"
-                with open(stdout_redirect, "w") as f:
+                with open(stdout_redirect, mode) as f:
                     f.write(output + "\n")
             else:
                 print(output)
@@ -151,7 +151,7 @@ def main():
             current_directory = os.getcwd()
             if stdout_redirect:
                 mode = "a" if stdout_append else "w"
-                with open(stdout_redirect, "w") as f:
+                with open(stdout_redirect, mode) as f:
                     f.write(current_directory + "\n")
             else:
                 print(current_directory)
