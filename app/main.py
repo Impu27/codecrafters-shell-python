@@ -113,6 +113,7 @@ def main():
         if cmd == "echo":
             echo_str = " ".join(parts[1:])
             if stdout_redirect:
+                mode = "a" if stdout_append else "w"
                 with open(stdout_redirect, "w") as f:
                     f.write(echo_str + "\n")
             else:
@@ -137,6 +138,7 @@ def main():
                 else:
                     output = f"{target}: not found"
             if stdout_redirect:
+                mode = "a" if stdout_append else "w"
                 with open(stdout_redirect, "w") as f:
                     f.write(output + "\n")
             else:
@@ -148,6 +150,7 @@ def main():
         if cmd == "pwd":
             current_directory = os.getcwd()
             if stdout_redirect:
+                mode = "a" if stdout_append else "w"
                 with open(stdout_redirect, "w") as f:
                     f.write(current_directory + "\n")
             else:
@@ -182,22 +185,23 @@ def main():
         full_path = find_executable(cmd)
         if full_path:
             try:
-                # Choose append or overwrite mode for stdout
-                stdout_target = (
-                    open(stdout_redirect, "a" if stdout_append else "w")
-                    if stdout_redirect
-                    else None
-                )
-                stderr_target = (
-                    open(stderr_redirect, "w") if stderr_redirect else None
-                )
+                # Choose correct mode for stdout
+                stdout_target = None
+                stderr_target = None
+
+                if stdout_redirect:
+                    mode = "a" if stdout_append else "w"
+                    stdout_target = open(stdout_redirect, mode)
+                if stderr_redirect:
+                    stderr_target = open(stderr_redirect, "w")
 
                 subprocess.run(
                     parts,
                     stdout=stdout_target or sys.stdout,
-                    stderr=stderr_target or sys.stderr,
+                    stderr=stderr_target or sys.stderr
                 )
 
+                # Close files after use
                 if stdout_target:
                     stdout_target.close()
                 if stderr_target:
