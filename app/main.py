@@ -69,6 +69,13 @@ def main():
             else:
                 print("syntax error: no file after redirection operator")
                 continue
+
+        # Create files early (even if no output)
+        if stdout_redirect:
+            open(stdout_redirect, "w").close()
+        if stderr_redirect:
+            open(stderr_redirect, "w").close()
+
         if not parts:
             continue
         cmd = parts[0]
@@ -163,22 +170,13 @@ def main():
         full_path = find_executable(cmd)
         if full_path:
             try:
-                # Open files as needed
-                stdout_target = open(stdout_redirect, "w") if stdout_redirect else None
-                stderr_target = open(stderr_redirect, "w") if stderr_redirect else None
-
-                subprocess.run(
-                    parts,
-                    stdout=stdout_target or sys.stdout,
-                    stderr=stderr_target or sys.stderr
-                )
-
-                # Close files if opened
-                if stdout_target:
-                    stdout_target.close()
-                if stderr_target:
-                    stderr_target.close()
-
+                with open(stdout_redirect or os.devnull, "w") as out, \
+                     open(stderr_redirect or os.devnull, "w") as err:
+                    subprocess.run(
+                        parts,
+                        stdout=out if stdout_redirect else None,
+                        stderr=err if stderr_redirect else None
+                    )
             except Exception as e:
                 print(f"Error executing {cmd}: {e}")
             continue
