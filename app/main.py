@@ -43,6 +43,25 @@ def main():
         cmd = parts[0]
 
 
+        # --- Handle output redirection early ---
+        stdout_redirect = None
+        if ">" in parts or "1>" in parts:
+            if "1>" in parts:
+                op_index = parts.index("1>")
+            else:
+                op_index = parts.index(">")
+            # Making sure there is a filename after > or 1>
+            if op_index + 1 < len(parts):
+                stdout_redirect = parts[op_index + 1]
+                parts = parts[:op_index] #remove the redirection tokens
+            else:
+                print("syntax error: no file after redirection operator")
+                continue
+        if not parts:
+            continue
+        cmd = parts[0]
+
+
         # --- Handle builtins ---
         # --- Handle 'exit' command ---
         if cmd == "exit":
@@ -61,8 +80,12 @@ def main():
 
         # --- Handle 'echo' command ---
         if cmd == "echo":
-            echoString = " ".join(parts[1:])
-            print(echoString)
+            echo_str = " ".join(parts[1:])
+            if stdout_redirect:
+                with open(stdout_redirect, "w") as f:
+                    f.write(echo_str + "\n")
+            else:
+                print(echo_str)
             continue
 
 
@@ -74,28 +97,30 @@ def main():
             target = parts[1]
             # 1) Check if it's a builtin
             if target in builtin_commands:
-                print(f"{parts[1]} is a shell builtin")
-                continue
-
-            # 2️⃣ Otherwise, check in PATH
-            path_dirs = os.environ.get("PATH", "").split(os.pathsep)
-            found = False
-            for directory in path_dirs:
-                full_path = os.path.join(directory, target)
-                if os.path.isfile(full_path) and os.access(full_path, os.X_OK):
-                    print(f"{target} is {full_path}")
-                    found = True
-                    break
-
-            if not found:
-                print(f"{parts[1]}: not found")
+                output = f"{target} is a shell builtin"
+            # 2) Otherwise, check in PATH
+            else:
+                path = find_executable(target)
+                if path:
+                    output = f"{target} is {path}"
+                else:
+                    output = f"{target}: not found"
+            if stdout_redirect:
+                with open(stdout_redirect, "w") as f:
+                    f.write(output + "\n")
+            else:
+                print(output)
             continue
 
 
         # --- Handle 'pwd' comment ---
         if cmd == "pwd":
             current_directory = os.getcwd()
-            print(current_directory)
+            if stdout_redirect:
+                with open(stdout_redirect, "w") as f:
+                    f.write(current_directory + "\n")
+            else:
+                print(current_directory)
             continue
 
 
@@ -127,25 +152,9 @@ def main():
         if full_path:
             try:
                 # Handle output redirection
-                if ">" in parts or "1>" in parts:
-                    if "1>" in parts:
-                        op_index = parts.index("1>")
-                    else:
-                        op_index = parts.index(">")
-
-                    # The token after > or 1> should be the output file path
-                    if op_index + 1 >= len(parts):
-                        print("syntax error: no file after redirection operator")
-                        continue
-
-                    output_file = parts[op_index + 1]
-
-                    # Command before the redirection operator
-                    cmd_args = parts[:op_index]
-
-                    # Open the file for writing (truncate if exists)
-                    with open(output_file, "w") as f:
-                        subprocess.run(cmd_args, stdout=f, stderr=sys.stderr)
+                if stdout_redirect:
+                    with open(stdout_redirect, "w") as f:
+                        subprocess.run(parts, stdout=f, stderr=sys.stderr)
                 else:
                     # No redirection — normal execution
                     subprocess.run(parts)
