@@ -26,9 +26,12 @@ def write_output(text, stdout_redirect=None, stderr_redirect=None, append=False)
             f.write(text + ("\n" if not text.endswith("\n") else ""))
         return
     elif stderr_redirect:
+        # --- UPDATE FOR STAGE 2>> ---
         # If a built-in's *error* is being written, use stderr_redirect
         os.makedirs(os.path.dirname(stderr_redirect), exist_ok=True)
-        with open(stderr_redirect, "w") as f:
+        # Use append mode ('a') if the append flag is True, otherwise use overwrite ('w').
+        mode = "a" if append else "w"
+        with open(stderr_redirect, mode) as f:
             f.write(text + ("\n" if not text.endswith("\n") else ""))
         return
     else:
@@ -39,22 +42,17 @@ def main():
     while True:
         # READ
         sys.stdout.write("$ ")
-        sys.stdout.flush() # ensures the prompt appears immediately
+        sys.stdout.flush() 
         try:
-            #wait for user input
             command = input().strip()
         except EOFError:
-            # When user presses Ctrl+D, gracefully exit
             break
         except KeyboardInterrupt:
-            # Handle Ctrl+C gracefully
             sys.stdout.write("\n")
             continue
 
         if command == "":
-            # Empty input: just show prompt again
             continue
-        # --- UPDATED: Use shlex for proper quote parsing ---
         try:
             parts = shlex.split(command)
         except ValueError as e:
@@ -62,19 +60,28 @@ def main():
             continue
         if not parts:
             continue
-        # cmd = parts[0] # Defined later after token removal
-
 
         # --- Handle output redirection early ---
         stdout_redirect = None
         stderr_redirect = None
-        stdout_append = False  # track if it's append mode
+        stdout_append = False  
+        stderr_append = False  # <--- NEW FLAG for 2>>
         
-        # Keep track of which indices to remove
         tokens_to_remove = []
 
-        # Check for stderr redirection (2>)
-        if "2>" in parts:
+        # Check for stderr append redirection (2>>) <--- NEW BLOCK
+        if "2>>" in parts:
+            op_index = parts.index("2>>")
+            if op_index + 1 < len(parts):
+                stderr_redirect = parts[op_index + 1]
+                stderr_append = True # Set flag for append mode
+                tokens_to_remove.extend([op_index, op_index + 1])
+            else:
+                print("syntax error: no file after redirection operator")
+                continue
+
+        # Check for stderr overwrite redirection (2>)
+        elif "2>" in parts:
             op_index = parts.index("2>")
             if op_index + 1 < len(parts):
                 stderr_redirect = parts[op_index + 1]
@@ -83,8 +90,7 @@ def main():
                 print("syntax error: no file after redirection operator")
                 continue
 
-        # Handle stdout redirection (overwrite & append)
-        # 1. Detect append redirection first (>> or 1>>)
+        # Handle stdout append (>> or 1>>)
         if ">>" in parts or "1>>" in parts:
             if "1>>" in parts:
                 op_index = parts.index("1>>")
@@ -93,7 +99,7 @@ def main():
 
             if op_index + 1 < len(parts):
                 stdout_redirect = parts[op_index + 1]
-                stdout_append = True  # enable append mode
+                stdout_append = True
                 tokens_to_remove.extend([op_index, op_index + 1])
             else:
                 print("syntax error: no file after redirection operator")
@@ -109,8 +115,7 @@ def main():
                 print("syntax error: missing file after >")
                 continue
                 
-        # Remove redirection tokens from the parts list
-        # Remove them in reverse order to keep indices correct
+        # Remove redirection tokens
         if tokens_to_remove:
             tokens_to_remove.sort(reverse=True)
             for index in tokens_to_remove:
@@ -120,11 +125,11 @@ def main():
             continue
         cmd = parts[0]
 
-        # --- FIX: Ensure redirection files/directories exist for all commands (especially built-ins) ---
+        # --- File and Directory Setup ---
+        # This section ensures directories exist and truncates overwrite files immediately.
         if stdout_redirect:
             if os.path.dirname(stdout_redirect):
                  os.makedirs(os.path.dirname(stdout_redirect), exist_ok=True)
-            # For overwrite (> or 1>), explicitly create the file here to ensure it exists and is truncated.
             if not stdout_append:
                 try:
                     open(stdout_redirect, "w").close()
@@ -135,32 +140,24 @@ def main():
         if stderr_redirect:
             if os.path.dirname(stderr_redirect):
                  os.makedirs(os.path.dirname(stderr_redirect), exist_ok=True)
-            try:
-                # Create and truncate the file for stderr redirection, ensuring it exists for the test.
-                open(stderr_redirect, "w").close()
-            except Exception as e:
-                print(f"shell: failed to create file {stderr_redirect}: {e}")
-                continue
+            # Only truncate for OVERWRITE (2>), not APPEND (2>>)
+            if not stderr_append: 
+                try:
+                    open(stderr_redirect, "w").close()
+                except Exception as e:
+                    print(f"shell: failed to create file {stderr_redirect}: {e}")
+                    continue
 
         # --- Handle builtins ---
-        # --- Handle 'exit' command ---
         if cmd == "exit":
             exit_code = 0
             if len(parts) > 1:
-                try:
-                    exit_code = int(parts[1])
-                except ValueError:
-                    exit_code = 1
+                try: exit_code = int(parts[1])
+                except ValueError: exit_code = 1
             sys.exit(exit_code)
 
-
-        # --- Handle 'echo' command (Quote Stripping REMOVED) ---
         if cmd == "echo":
             msg = " ".join(parts[1:])
-            
-            # The manual quote stripping logic was removed to fix Stage #YT5.
-
-            # Echo's normal output is always stdout. 
             if stdout_redirect:
                 mode = "a" if stdout_append else "w"
                 with open(stdout_redirect, mode) as f:
@@ -170,35 +167,30 @@ def main():
             continue
 
 
-        # --- Handle 'type' command ---
         if cmd == 'type':
-            if len(parts) < 2:
-                continue
+            if len(parts) < 2: continue
             builtin_commands = ["exit", "echo", "type", "pwd", "cd"]
             target = parts[1]
             if target in builtin_commands:
                 output = f"{target} is a shell builtin"
             else:
                 path = find_executable(target)
-                if path:
-                    output = f"{target} is {path}"
-                else:
-                    output = f"{target}: not found"
-            write_output(output, stdout_redirect, stderr_redirect, stdout_append)
+                if path: output = f"{target} is {path}"
+                else: output = f"{target}: not found"
+            
+            # Note: built-in success output is stdout. We use the stdout_append flag here.
+            write_output(output, stdout_redirect, stderr_redirect, stdout_append) 
             continue
 
 
-        # --- Handle 'pwd' comment ---
         if cmd == "pwd":
             current_directory = os.getcwd()
             write_output(current_directory, stdout_redirect, stderr_redirect, stdout_append)
             continue
 
 
-        # --- Handle 'cd' comment ---
         if cmd == "cd":
-            if len(parts) < 2:
-                continue
+            if len(parts) < 2: continue
             target_dir = parts[1]
             if target_dir == "~" or target_dir.startswith("~/"):
                 target_dir = os.path.expanduser(target_dir)
@@ -212,22 +204,23 @@ def main():
             continue
 
 
-
         # --- Handle external programs ---
         full_path = find_executable(cmd)
         if full_path:
             try:
+                # Open stdout target: 'a' if stdout_append, 'w' otherwise
                 stdout_target = open(stdout_redirect, "a" if stdout_append else "w") if stdout_redirect else None
-                stderr_target = open(stderr_redirect, "w") if stderr_redirect else None
                 
-                # --- FIX FOR STAGE #IP1 ---
-                # Pass the simple command name (cmd) as the first argument in the list (argv[0]),
-                # and use the 'executable' parameter to specify the full path of the program to run.
+                # --- UPDATE FOR STAGE 2>> ---
+                # Determine stderr mode: 'a' if stderr_append, 'w' otherwise.
+                stderr_mode = "a" if stderr_append else "w"
+                stderr_target = open(stderr_redirect, stderr_mode) if stderr_redirect else None
+                
                 args_for_program = [cmd] + parts[1:] 
 
                 subprocess.run(
-                    args_for_program,  # The list of arguments, starting with 'custom_exe_9708'
-                    executable=full_path, # Tells the OS to run the found full path
+                    args_for_program, 
+                    executable=full_path, 
                     stdout=stdout_target or sys.stdout,
                     stderr=stderr_target or sys.stderr
                 )
