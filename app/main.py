@@ -130,11 +130,19 @@ def main():
             if (msg.startswith("'") and msg.endswith("'")) or (msg.startswith('"') and msg.endswith('"')):
                 msg = msg[1:-1]
 
-            # If stderr redirection exists, write to stderr instead of stdout
-            if stderr_redirect and not stdout_redirect:
-                write_output(msg, None, stderr_redirect, False)
-            else:
-                write_output(msg, stdout_redirect, stderr_redirect, stdout_append)
+            # Always print to stdout
+            print(msg, flush=True)
+
+            # If stderr redirection exists, also write to that file
+            if stderr_redirect:
+                os.makedirs(os.path.dirname(stderr_redirect), exist_ok=True)
+                with open(stderr_redirect, "w") as f:
+                    f.write(msg + ("\n" if not msg.endswith("\n") else ""))
+            elif stdout_redirect:
+                os.makedirs(os.path.dirname(stdout_redirect), exist_ok=True)
+                mode = "a" if stdout_append else "w"
+                with open(stdout_redirect, mode) as f:
+                    f.write(msg + ("\n" if not msg.endswith("\n") else ""))
             continue
 
 
