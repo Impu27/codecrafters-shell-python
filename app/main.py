@@ -3,7 +3,7 @@ import os
 import subprocess
 import shlex
 
-# 1. Initialize a global list to store command history
+# Global list to store command history, accessible by main()
 command_history = [] 
 
 """Searches for an executable in all directories listed in PATH.
@@ -28,7 +28,6 @@ def write_output(text, stdout_redirect=None, stderr_redirect=None, append=False)
             f.write(text + ("\n" if not text.endswith("\n") else ""))
         return
     elif stderr_redirect:
-        # --- UPDATE FOR STAGE 2>> ---
         # If a built-in's *error* is being written, use stderr_redirect
         os.makedirs(os.path.dirname(stderr_redirect), exist_ok=True)
         # Use append mode ('a') if the append flag is True, otherwise use overwrite ('w').
@@ -46,7 +45,7 @@ def main():
         sys.stdout.write("$ ")
         sys.stdout.flush() 
         try:
-            # We read the original, unparsed command for history recording
+            # Read the original, unparsed command for history recording
             command = input()
             command_stripped = command.strip()
         except EOFError:
@@ -58,8 +57,7 @@ def main():
         if command_stripped == "":
             continue
 
-        # 2. Record the command before parsing/redirection logic
-        # Record only non-empty commands.
+        # Record the command before parsing/redirection logic
         command_history.append(command_stripped)
 
         try:
@@ -74,16 +72,16 @@ def main():
         stdout_redirect = None
         stderr_redirect = None
         stdout_append = False  
-        stderr_append = False  # <--- NEW FLAG for 2>>
+        stderr_append = False 
         
         tokens_to_remove = []
 
-        # Check for stderr append redirection (2>>) <--- NEW BLOCK
+        # Check for stderr append redirection (2>>)
         if "2>>" in parts:
             op_index = parts.index("2>>")
             if op_index + 1 < len(parts):
                 stderr_redirect = parts[op_index + 1]
-                stderr_append = True # Set flag for append mode
+                stderr_append = True 
                 tokens_to_remove.extend([op_index, op_index + 1])
             else:
                 print("syntax error: no file after redirection operator")
@@ -135,7 +133,6 @@ def main():
         cmd = parts[0]
 
         # --- File and Directory Setup ---
-        # This section ensures directories exist and truncates overwrite files immediately.
         if stdout_redirect:
             if os.path.dirname(stdout_redirect):
                  os.makedirs(os.path.dirname(stdout_redirect), exist_ok=True)
@@ -149,7 +146,6 @@ def main():
         if stderr_redirect:
             if os.path.dirname(stderr_redirect):
                  os.makedirs(os.path.dirname(stderr_redirect), exist_ok=True)
-            # Only truncate for OVERWRITE (2>), not APPEND (2>>)
             if not stderr_append: 
                 try:
                     open(stderr_redirect, "w").close()
@@ -167,7 +163,6 @@ def main():
 
         if cmd == "echo":
             msg = " ".join(parts[1:])
-            # Note: We can reuse write_output for echo, but the existing code is fine too
             if stdout_redirect:
                 mode = "a" if stdout_append else "w"
                 with open(stdout_redirect, mode) as f:
@@ -179,7 +174,6 @@ def main():
 
         if cmd == 'type':
             if len(parts) < 2: continue
-            # 4. Add "history" to the list of builtins
             builtin_commands = ["exit", "echo", "type", "pwd", "cd", "history"]
             target = parts[1]
             if target in builtin_commands:
@@ -189,7 +183,6 @@ def main():
                 if path: output = f"{target} is {path}"
                 else: output = f"{target}: not found"
             
-            # Note: built-in success output is stdout. We use the stdout_append flag here.
             write_output(output, stdout_redirect, stderr_redirect, stdout_append) 
             continue
 
@@ -201,16 +194,12 @@ def main():
 
 
         if cmd == "cd":
-            if len(parts) < 2: 
-                # According to common shell behavior, 'cd' without arguments usually
-                # goes to the home directory. We'll skip for now if no argument.
-                continue 
+            if len(parts) < 2: continue
             target_dir = parts[1]
             if target_dir == "~" or target_dir.startswith("~/"):
                 target_dir = os.path.expanduser(target_dir)
             if not os.path.isdir(target_dir):
-                # Errors should go to stderr, but for this project, builtins typically print to stdout/print
-                print(f"cd: {target_dir}: No such file or directory") 
+                print(f"cd: {target_dir}: No such file or directory")
                 continue
             try:
                 os.chdir(target_dir)
@@ -218,17 +207,36 @@ def main():
                 print(f"cd: {target_dir}: {e}")
             continue
 
-        # 3. Implement the history builtin
+        # --- UPDATED history builtin logic ---
         if cmd == "history":
+            
+            # 1. Determine how many history entries to show (n)
+            history_list = command_history
+            start_index = 0
+            
+            if len(parts) > 1:
+                try:
+                    limit = int(parts[1])
+                    if limit > 0:
+                        # Slice the list to get only the last 'limit' items
+                        history_list = command_history[-limit:]
+                        # Calculate the starting line number for display
+                        start_index = len(command_history) - len(history_list)
+                    else:
+                        # If n is 0 or negative, display nothing
+                        history_list = []
+                except ValueError:
+                    # Ignore invalid arguments and display full history
+                    pass 
+
             history_output = ""
-            # command_history is 1-indexed for display
-            for i, entry in enumerate(command_history, 1):
-                # Format: "    1  command"
+            # 2. Iterate over the (potentially sliced) list
+            # We use start=start_index + 1 for correct 1-based numbering.
+            for i, entry in enumerate(history_list, start=start_index + 1):
+                # Format: "    1  command" (5 spaces for the number, 2 spaces before the command)
                 history_output += f"{i:5}  {entry}\n" 
             
             # Write to stdout, respecting redirection
-            # write_output handles the final newline if not present, but our loop adds it.
-            # We remove the trailing newline if present before calling write_output
             write_output(history_output.rstrip("\n"), stdout_redirect, stderr_redirect, stdout_append)
             continue
 
@@ -237,11 +245,7 @@ def main():
         full_path = find_executable(cmd)
         if full_path:
             try:
-                # Open stdout target: 'a' if stdout_append, 'w' otherwise
                 stdout_target = open(stdout_redirect, "a" if stdout_append else "w") if stdout_redirect else None
-                
-                # --- UPDATE FOR STAGE 2>> ---
-                # Determine stderr mode: 'a' if stderr_append, 'w' otherwise.
                 stderr_mode = "a" if stderr_append else "w"
                 stderr_target = open(stderr_redirect, stderr_mode) if stderr_redirect else None
                 
