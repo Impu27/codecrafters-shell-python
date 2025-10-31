@@ -110,23 +110,35 @@ def display_matches_hook(substitution_text, matches, longest_match_length):
     """
     global _TAB_PRESSED_COUNT, _LAST_COMPLETION_TEXT
     
-    _TAB_PRESSED_COUNT += 1
-    
-    # 1. First TAB press: Ring the bell.
+    # ... logic for _TAB_PRESSED_COUNT increment ...
+
+    # The hook is called because multiple matches exist (ambiguous)
+    # This part should be inside the function body where the counter is incremented/checked
+    # Assuming the counter logic correctly leads to this block on the 2nd tab:
+
     if _TAB_PRESSED_COUNT == 1:
+        # First TAB press: Ring the bell.
         sys.stdout.write('\a')
         sys.stdout.flush()
         
-    # 2. Second TAB press: Print the list and redraw the prompt.
     elif _TAB_PRESSED_COUNT == 2:
+        
+        # 1. Print a newline to move the cursor below the current input line
+        # This is CRITICAL.
         sys.stdout.write('\n')
+        
+        # 2. Print the list of matches separated by 2 spaces, followed by a newline
+        # The matches list order: xyz_bar, xyz_baz, xyz_foo (alphabetical)
         list_output = "  ".join(matches)
+        
+        # Write the list AND the subsequent newline as one operation
         sys.stdout.write(list_output + '\n') 
+        
+        # 3. Print the prompt and the original text on the new line
         sys.stdout.write(f"$ {_LAST_COMPLETION_TEXT}")
         sys.stdout.flush()
 
-    if _TAB_PRESSED_COUNT > 2:
-        _TAB_PRESSED_COUNT = 0
+    # ... logic for _TAB_PRESSED_COUNT reset ...
 
 
 def setup_readline():
