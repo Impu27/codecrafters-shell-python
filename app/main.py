@@ -2,9 +2,10 @@ import sys
 import os
 import subprocess
 import shlex
+import readline # <--- NEW IMPORT
 
-# Global list to store command history, accessible by main()
-command_history = [] 
+# command_history is no longer managed manually; readline handles it.
+# We will access readline's history list when the 'history' builtin is executed.
 
 """Searches for an executable in all directories listed in PATH.
 Returns the full path if found and executable, otherwise None."""
@@ -45,8 +46,9 @@ def main():
         sys.stdout.write("$ ")
         sys.stdout.flush() 
         try:
-            # Read the original, unparsed command for history recording
-            command = input()
+            # Using input() with readline imported automatically enables history recall
+            # and line editing features like the up arrow key.
+            command = input() 
             command_stripped = command.strip()
         except EOFError:
             break
@@ -57,8 +59,8 @@ def main():
         if command_stripped == "":
             continue
 
-        # Record the command before parsing/redirection logic
-        command_history.append(command_stripped)
+        # NOTE: We rely on 'readline' to automatically add commands to its internal history
+        # when 'input()' returns, so manual history append is removed.
 
         try:
             parts = shlex.split(command_stripped)
@@ -207,10 +209,13 @@ def main():
                 print(f"cd: {target_dir}: {e}")
             continue
 
-        # --- UPDATED history builtin logic ---
+        # --- UPDATED history builtin logic to use readline history ---
         if cmd == "history":
             
-            # 1. Determine how many history entries to show (n)
+            # Get the history list from readline, which is 1-indexed and includes commands
+            # entered in the current session up to this point.
+            command_history = [readline.get_history_item(i) for i in range(1, readline.get_current_history_length() + 1) if readline.get_history_item(i) is not None]
+
             history_list = command_history
             start_index = 0
             
@@ -230,7 +235,6 @@ def main():
                     pass 
 
             history_output = ""
-            # 2. Iterate over the (potentially sliced) list
             # We use start=start_index + 1 for correct 1-based numbering.
             for i, entry in enumerate(history_list, start=start_index + 1):
                 # Format: "    1  command" (5 spaces for the number, 2 spaces before the command)
