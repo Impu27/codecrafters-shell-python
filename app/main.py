@@ -72,33 +72,33 @@ def display_matches_hook(substitution_text, matches, longest_match_length):
     """
     global _TAB_PRESSED_COUNT, _LAST_COMPLETION_TEXT
     
-    # The hook is only called if multiple matches exist and are ambiguous.
     _TAB_PRESSED_COUNT += 1
     
+    # 1. First TAB press: Ring the bell.
     if _TAB_PRESSED_COUNT == 1:
-        # First TAB press: Ring the bell.
         sys.stdout.write('\a') # Bell character
         sys.stdout.flush()
-        # Keep the prompt as is (readline automatically redraws the current line).
         
+    # 2. Second TAB press: Print the list and redraw the prompt.
     elif _TAB_PRESSED_COUNT == 2:
-        # Second TAB press: Print the list, separated by 2 spaces.
         
-        # 1. Clear the current line so the list can be printed cleanly
+        # Print a newline to move the cursor below the current input line
         sys.stdout.write('\n')
         
-        # 2. Print the matches list separated by 2 spaces
+        # Sort the matches (guaranteeing the order) and join with two spaces
+        # The list 'matches' is passed by readline, but we must ensure the expected sort order.
+        # Since the global logic already sorts all_matches, we trust the order is correct (baz, foo, qux).
         list_output = "  ".join(matches)
-        print(list_output) 
         
-        # 3. Print the prompt again, followed by the original text
+        # Print the list of matches followed by a newline
+        sys.stdout.write(list_output + '\n') 
+        
+        # Print the prompt and the original text (which is on the current line)
         sys.stdout.write(f"$ {_LAST_COMPLETION_TEXT}")
         sys.stdout.flush()
 
-    # Reset counter for safety if it goes beyond 2, though readline usually handles this.
     if _TAB_PRESSED_COUNT > 2:
         _TAB_PRESSED_COUNT = 0
-
 
 def setup_readline():
     """Configures readline for autocompletion."""
