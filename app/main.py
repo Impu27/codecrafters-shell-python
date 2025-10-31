@@ -125,19 +125,16 @@ def main():
 
 
         # --- Handle 'echo' command ---
-        # --- Special Fix for `echo ... 2>` case ---
-        if cmd == "echo" and stderr_redirect and not stdout_redirect:
-            msg = " ".join(parts[1:]).strip("'\"")
-            write_output(msg, None, stderr_redirect, False)
-            continue
-
-        # echo
         if cmd == "echo":
-            echo_str = " ".join(parts[1:])
-            if (echo_str.startswith("'") and echo_str.endswith("'")) or \
-               (echo_str.startswith('"') and echo_str.endswith('"')):
-                echo_str = echo_str[1:-1]
-            write_output(echo_str, stdout_redirect, stderr_redirect, stdout_append)
+            msg = " ".join(parts[1:])
+            if (msg.startswith("'") and msg.endswith("'")) or (msg.startswith('"') and msg.endswith('"')):
+                msg = msg[1:-1]
+
+            # If stderr redirection exists, write to stderr instead of stdout
+            if stderr_redirect and not stdout_redirect:
+                write_output(msg, None, stderr_redirect, False)
+            else:
+                write_output(msg, stdout_redirect, stderr_redirect, stdout_append)
             continue
 
 
