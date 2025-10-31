@@ -5,7 +5,6 @@ import shlex
 import readline # <--- NEW IMPORT
 
 # command_history is no longer managed manually; readline handles it.
-# We will access readline's history list when the 'history' builtin is executed.
 
 """Searches for an executable in all directories listed in PATH.
 Returns the full path if found and executable, otherwise None."""
@@ -42,25 +41,23 @@ def write_output(text, stdout_redirect=None, stderr_redirect=None, append=False)
 
 def main():
     while True:
-        # READ
-        sys.stdout.write("$ ")
-        sys.stdout.flush() 
+        # READ: Use input() with the prompt string directly.
         try:
-            # Using input() with readline imported automatically enables history recall
-            # and line editing features like the up arrow key.
-            command = input() 
+            # This is the key change to improve readline's handling of the prompt
+            command = input("$ ") 
             command_stripped = command.strip()
         except EOFError:
             break
         except KeyboardInterrupt:
+            # When using input(prompt), a Ctrl+C inside the input call 
+            # often just starts a new line and loop iteration.
             sys.stdout.write("\n")
             continue
 
         if command_stripped == "":
             continue
 
-        # NOTE: We rely on 'readline' to automatically add commands to its internal history
-        # when 'input()' returns, so manual history append is removed.
+        # NOTE: readline automatically handles history append/recall via input()
 
         try:
             parts = shlex.split(command_stripped)
@@ -209,11 +206,10 @@ def main():
                 print(f"cd: {target_dir}: {e}")
             continue
 
-        # --- UPDATED history builtin logic to use readline history ---
+        # --- history builtin logic ---
         if cmd == "history":
             
-            # Get the history list from readline, which is 1-indexed and includes commands
-            # entered in the current session up to this point.
+            # Get the history list from readline.
             command_history = [readline.get_history_item(i) for i in range(1, readline.get_current_history_length() + 1) if readline.get_history_item(i) is not None]
 
             history_list = command_history
@@ -223,24 +219,17 @@ def main():
                 try:
                     limit = int(parts[1])
                     if limit > 0:
-                        # Slice the list to get only the last 'limit' items
                         history_list = command_history[-limit:]
-                        # Calculate the starting line number for display
                         start_index = len(command_history) - len(history_list)
                     else:
-                        # If n is 0 or negative, display nothing
                         history_list = []
                 except ValueError:
-                    # Ignore invalid arguments and display full history
                     pass 
 
             history_output = ""
-            # We use start=start_index + 1 for correct 1-based numbering.
             for i, entry in enumerate(history_list, start=start_index + 1):
-                # Format: "    1  command" (5 spaces for the number, 2 spaces before the command)
                 history_output += f"{i:5}  {entry}\n" 
             
-            # Write to stdout, respecting redirection
             write_output(history_output.rstrip("\n"), stdout_redirect, stderr_redirect, stdout_append)
             continue
 
