@@ -132,7 +132,12 @@ def main():
         # --- Handle 'echo' command ---
         if cmd == "echo":
             echo_str = " ".join(parts[1:])
-            write_output(echo_str, stdout_redirect, stderr_redirect, stdout_append)
+            if stderr_redirect:
+                # If there's an explicit 2> redirection, write to stderr file
+                write_output(echo_str, None, stderr_redirect, stdout_append)
+            else:
+                # Otherwise, normal stdout (handles > or >> as usual)
+                write_output(echo_str, stdout_redirect, None, stdout_append)
             continue
 
 
