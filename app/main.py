@@ -16,24 +16,17 @@ def find_executable(program):
 
 
 def write_output(text, stdout_redirect=None, stderr_redirect=None, append=False):
-    """Writes text to appropriate stream or file for redirection."""
+    """Writes text to redirected file or prints to stdout."""
     if stderr_redirect:
-        # Always overwrite for stderr redirection (like `2>`)
+        os.makedirs(os.path.dirname(stderr_redirect), exist_ok=True)
         with open(stderr_redirect, "w") as f:
-            f.write(text)
-            if not text.endswith("\n"):
-                f.write("\n")
-            f.flush()
-            os.fsync(f.fileno())
+            f.write(text + ("\n" if not text.endswith("\n") else ""))
         return
     elif stdout_redirect:
+        os.makedirs(os.path.dirname(stdout_redirect), exist_ok=True)
         mode = "a" if append else "w"
         with open(stdout_redirect, mode) as f:
-            f.write(text)
-            if not text.endswith("\n"):
-                f.write("\n")
-            f.flush()
-            os.fsync(f.fileno())
+            f.write(text + ("\n" if not text.endswith("\n") else ""))
         return
     else:
         print(text, flush=True)
@@ -99,18 +92,14 @@ def main():
                 print("syntax error: no file after redirection operator")
                 continue
 
-        # 2. Detect normal overwrite redirection (>, 1>)
+        # stdout overwrite (>, 1>)
         elif ">" in parts or "1>" in parts:
-            if "1>" in parts:
-                op_index = parts.index("1>")
-            else:
-                op_index = parts.index(">")
-
+            op_index = parts.index("1>") if "1>" in parts else parts.index(">")
             if op_index + 1 < len(parts):
                 stdout_redirect = parts[op_index + 1]
                 parts = parts[:op_index]
             else:
-                print("syntax error: no file after redirection operator")
+                print("syntax error: missing file after >")
                 continue
 
 
@@ -136,18 +125,19 @@ def main():
 
 
         # --- Handle 'echo' command ---
+        # --- Special Fix for `echo ... 2>` case ---
+        if cmd == "echo" and stderr_redirect and not stdout_redirect:
+            msg = " ".join(parts[1:]).strip("'\"")
+            write_output(msg, None, stderr_redirect, False)
+            continue
+
+        # echo
         if cmd == "echo":
             echo_str = " ".join(parts[1:])
-            # Remove surrounding quotes (Codecrafters expects no quotes in output)
-            if (echo_str.startswith("'") and echo_str.endswith("'")) or (echo_str.startswith('"') and echo_str.endswith('"')):
+            if (echo_str.startswith("'") and echo_str.endswith("'")) or \
+               (echo_str.startswith('"') and echo_str.endswith('"')):
                 echo_str = echo_str[1:-1]
-
-            if stderr_redirect:
-                # Write to stderr redirection file
-                write_output(echo_str, None, stderr_redirect, stdout_append)
-            else:
-                # Normal stdout (handles > or >>)
-                write_output(echo_str, stdout_redirect, None, stdout_append)
+            write_output(echo_str, stdout_redirect, stderr_redirect, stdout_append)
             continue
 
 
@@ -205,32 +195,25 @@ def main():
         full_path = find_executable(cmd)
         if full_path:
             try:
-                # Choose correct mode for stdout
-                stdout_target = None
-                stderr_target = None
+                os.makedirs(os.path.dirname(stdout_redirect), exist_ok=True) if stdout_redirect else None
+                os.makedirs(os.path.dirname(stderr_redirect), exist_ok=True) if stderr_redirect else None
 
-                if stdout_redirect:
-                    mode = "a" if stdout_append else "w"
-                    stdout_target = open(stdout_redirect, mode)
-                if stderr_redirect:
-                    stderr_target = open(stderr_redirect, "w")
+                stdout_target = open(stdout_redirect, "a" if stdout_append else "w") if stdout_redirect else None
+                stderr_target = open(stderr_redirect, "w") if stderr_redirect else None
 
                 subprocess.run(
-                    [full_path] + parts[1:], # use full executable path
+                    [full_path] + parts[1:],
                     stdout=stdout_target or sys.stdout,
                     stderr=stderr_target or sys.stderr
                 )
 
-                # Close files after use
                 if stdout_target:
                     stdout_target.close()
                 if stderr_target:
                     stderr_target.close()
-
             except Exception as e:
                 print(f"Error executing {cmd}: {e}")
             continue
-        
 
 
         # PRINT for Unknown command
