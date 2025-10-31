@@ -2,37 +2,70 @@ import sys
 import os
 import subprocess
 import shlex
-import readline # <--- NEW IMPORT
+import readline 
 
 
 # --- 1. Autocompletion Logic ---
 BUILTIN_COMMANDS = ["exit", "echo", "type", "pwd", "cd"] # List of commands to complete
 
+def find_all_executables_with_prefix(prefix):
+    """
+    Searches all directories in PATH for executable files starting with the given prefix.
+    """
+    path_dirs = os.environ.get("PATH", "").split(os.pathsep)
+    matches = set() # Use a set to avoid duplicates
+
+    for directory in path_dirs:
+        # Handle cases where PATH includes non-existent directories gracefully
+        if not os.path.isdir(directory):
+            continue
+            
+        try:
+            # List all entries in the directory
+            for item_name in os.listdir(directory):
+                # Check if the item starts with the prefix
+                if item_name.startswith(prefix):
+                    full_path = os.path.join(directory, item_name)
+                    # Check if the item is a regular file AND is executable
+                    if os.path.isfile(full_path) and os.access(full_path, os.X_OK):
+                        matches.add(item_name)
+        except OSError:
+            # Ignore directories we can't read
+            continue
+            
+    return sorted(list(matches)) # Return a sorted list of unique external commands
+
+
 def shell_completer(text, state):
     """
     Custom completer function for readline.
-    'text' is the word currently being typed by the user (e.g., 'ech').
-    'state' is used by readline to get multiple matches (0 for the first, 1 for the second, etc.).
     """
     
-    # Filter the list of built-in commands to find matches
-    matches = [cmd for cmd in BUILTIN_COMMANDS if cmd.startswith(text)]
+    # 1. Check Built-ins
+    builtin_matches = [cmd for cmd in BUILTIN_COMMANDS if cmd.startswith(text)]
     
-    # readline calls this function repeatedly, incrementing 'state'.
-    # When state is 0, return the first match. When state is 1, return the second, and so on.
-    if state < len(matches):
-        # The tester explicitly requires a space after the completed command.
-        return matches[state] + " "
+    # 2. Check External Executables
+    external_matches = find_all_executables_with_prefix(text)
+    
+    # 3. Combine and sort all matches
+    all_matches = sorted(list(set(builtin_matches + external_matches)))
+    
+    # 4. Handle Bell Character (if no matches are found)
+    if not all_matches and state == 0:
+        sys.stdout.write('\x07')
+        sys.stdout.flush()
+        return None
+    
+    # 5. Return the match based on the state
+    if state < len(all_matches):
+        # Return the completed command plus a space
+        return all_matches[state] + " "
     else:
         return None # No more matches found
 
 def setup_readline():
     """Configures readline for autocompletion."""
-    # Set the custom completer function
     readline.set_completer(shell_completer)
-    
-    # Configure readline to automatically use the completer function on Tab press
-    # 'tab: complete' is the standard binding for Tab to initiate completion
     readline.parse_and_bind("tab: complete")
 
 # --- End of Autocompletion Logic ---
@@ -70,26 +103,19 @@ def write_output(text, stdout_redirect=None, stderr_redirect=None, append=False)
 
 
 def main():
-    # --- 2. Setup Readline before the loop starts ---
     setup_readline()
     
     while True:
-        # READ
-        # print() is safer than sys.stdout.write() when using readline
         try:
-            # readline automatically handles prompt display, input, and TAB completion
             command = input("$ ").strip() 
         except EOFError:
             break
         except KeyboardInterrupt:
-            # Readline typically handles this more cleanly, but keep for robustness
             sys.stdout.write("\n")
             continue
 
         if command == "":
             continue
-        # --- (Rest of the command execution logic remains the same) ---
-        
         try:
             parts = shlex.split(command)
         except ValueError as e:
