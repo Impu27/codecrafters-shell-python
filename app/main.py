@@ -26,10 +26,7 @@ def write_output(text, stdout_redirect=None, stderr_redirect=None, append=False)
             f.write(text + ("\n" if not text.endswith("\n") else ""))
         return
     elif stderr_redirect:
-        # Note: write_output is designed for stdout. If a built-in has an error
-        # it should print to sys.stderr or handle it separately.
-        # This branch is kept for consistency with the provided template,
-        # but built-ins should generally not route their *normal* output here.
+        # If a built-in's *error* is being written, use stderr_redirect
         os.makedirs(os.path.dirname(stderr_redirect), exist_ok=True)
         with open(stderr_redirect, "w") as f:
             f.write(text + ("\n" if not text.endswith("\n") else ""))
@@ -65,7 +62,7 @@ def main():
             continue
         if not parts:
             continue
-        cmd = parts[0]
+        # cmd = parts[0] # Defined later after token removal
 
 
         # --- Handle output redirection early ---
@@ -123,6 +120,30 @@ def main():
             continue
         cmd = parts[0]
 
+        # --- FIX: Ensure redirection files/directories exist for all commands (especially built-ins) ---
+        # The file needs to be created/truncated immediately when a redirection is specified.
+        if stdout_redirect:
+            # Handle directory creation for stdout redirection
+            if os.path.dirname(stdout_redirect):
+                 os.makedirs(os.path.dirname(stdout_redirect), exist_ok=True)
+            # For overwrite (> or 1>), explicitly create the file here to ensure it exists and is truncated.
+            if not stdout_append:
+                try:
+                    open(stdout_redirect, "w").close()
+                except Exception as e:
+                    print(f"shell: failed to create file {stdout_redirect}: {e}")
+                    continue
+                 
+        if stderr_redirect:
+            # Handle directory creation for stderr redirection (2>)
+            if os.path.dirname(stderr_redirect):
+                 os.makedirs(os.path.dirname(stderr_redirect), exist_ok=True)
+            try:
+                # Create and truncate the file for stderr redirection, ensuring it exists for the test.
+                open(stderr_redirect, "w").close()
+            except Exception as e:
+                print(f"shell: failed to create file {stderr_redirect}: {e}")
+                continue
 
         # --- Handle builtins ---
         # --- Handle 'exit' command ---
@@ -147,16 +168,15 @@ def main():
             if (msg.startswith("'") and msg.endswith("'")) or (msg.startswith('"') and msg.endswith('"')):
                 msg = msg[1:-1]
 
-            # FIX HERE: Echo's normal output is always stdout. 
-            # It should only redirect to a file if stdout_redirect is set.
-            # If only stderr_redirect (2>) is set, the output prints normally.
+            # Echo's normal output is always stdout. 
+            # It redirects only if stdout_redirect is set.
             if stdout_redirect:
-                os.makedirs(os.path.dirname(stdout_redirect), exist_ok=True)
+                # Directory is already created above
                 mode = "a" if stdout_append else "w"
                 with open(stdout_redirect, mode) as f:
                     f.write(msg + ("\n" if not msg.endswith("\n") else ""))
             else:
-                # No stdout redirection → normal print
+                # No stdout redirection (including when only stderr is redirected) → normal print
                 print(msg, flush=True)
             continue
 
@@ -177,6 +197,9 @@ def main():
                     output = f"{target} is {path}"
                 else:
                     output = f"{target}: not found"
+            
+            # Note: The existing write_output correctly handles stdout/stderr redirection for type/pwd 
+            # because 'type' only produces stdout output or an error printed to sys.stdout/sys.stderr.
             write_output(output, stdout_redirect, stderr_redirect, stdout_append)
             continue
 
@@ -192,7 +215,6 @@ def main():
         if cmd == "cd":
             # Check if argument is provided
             if len(parts) < 2:
-                # Usually defaults to the home directory, but we’ll skip that for now
                 continue
             target_dir = parts[1]
             # Handle '~' expansion first
@@ -200,8 +222,6 @@ def main():
                 target_dir = os.path.expanduser(target_dir)
             # Check if the directory exists
             if not os.path.isdir(target_dir):
-                # Note: cd errors should go to stderr, but for this stage, printing to stdout/sys.stdout is often accepted.
-                # Since no stderr redirection is implemented here, we use print.
                 print(f"cd: {target_dir}: No such file or directory")
                 continue
             try:
@@ -216,14 +236,17 @@ def main():
         full_path = find_executable(cmd)
         if full_path:
             try:
-                # Ensure directories exist for redirection files
-                os.makedirs(os.path.dirname(stdout_redirect), exist_ok=True) if stdout_redirect and os.path.dirname(stdout_redirect) else None
-                os.makedirs(os.path.dirname(stderr_redirect), exist_ok=True) if stderr_redirect and os.path.dirname(stderr_redirect) else None
-
+                # Note: Directories were already created above, but opening the files here 
+                # will truncate/append correctly based on the settings.
+                
                 # Open files for redirection
                 # Mode 'a' for append (>>), 'w' for overwrite (>, 2>)
                 stdout_target = open(stdout_redirect, "a" if stdout_append else "w") if stdout_redirect else None
                 stderr_target = open(stderr_redirect, "w") if stderr_redirect else None
+                
+                # If stdout was set for overwrite (and thus created/truncated above) but no file was opened here 
+                # (e.g. stdout_redirect was None), it would default to sys.stdout. This is correct.
+                # If a file was opened here, it handles the output correctly.
 
                 subprocess.run(
                     [full_path] + parts[1:],
