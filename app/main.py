@@ -55,12 +55,16 @@ def shell_completer(text, state):
     # 2. Check External Executables
     external_matches = find_all_executables_with_prefix(text)
     
-    # 3. Combine and sort all matches
+    # 3. Combine and sort all matches (ensures xyz_bar, xyz_baz, xyz_foo order)
     all_matches = sorted(list(set(builtin_matches + external_matches)))
     
-    # The default readline behavior will print the bell/list if we return multiple matches.
-    # We must return *all* matches here, and let the hook handle the display logic.
+    # Return *all* matches to the hook for display/bell logic
     if state < len(all_matches):
+        # Only complete immediately if there is a single, unambiguous match
+        # We return the match without a trailing space here, as the hook is where
+        # we handle the ambiguous case. If readline determines it's a unique match, 
+        # it will handle the final space/completion itself. 
+        # For this stage, we are only concerned with the ambiguous case.
         return all_matches[state]
     else:
         return None
@@ -72,6 +76,7 @@ def display_matches_hook(substitution_text, matches, longest_match_length):
     """
     global _TAB_PRESSED_COUNT, _LAST_COMPLETION_TEXT
     
+    # The hook is called because multiple matches exist (ambiguous)
     _TAB_PRESSED_COUNT += 1
     
     # 1. First TAB press: Ring the bell.
@@ -82,44 +87,31 @@ def display_matches_hook(substitution_text, matches, longest_match_length):
     # 2. Second TAB press: Print the list and redraw the prompt.
     elif _TAB_PRESSED_COUNT == 2:
         
-        # Print a newline to move the cursor below the current input line
+        # 1. Print a newline to move the cursor below the current input line
         sys.stdout.write('\n')
         
-        # Sort the matches (guaranteeing the order) and join with two spaces
-        # The list 'matches' is passed by readline, but we must ensure the expected sort order.
-        # Since the global logic already sorts all_matches, we trust the order is correct (baz, foo, qux).
+        # 2. Print the list of matches separated by 2 spaces, followed by a newline
         list_output = "  ".join(matches)
-        
-        # Print the list of matches followed by a newline
         sys.stdout.write(list_output + '\n') 
         
-        # Print the prompt and the original text (which is on the current line)
+        # 3. Print the prompt and the original text on the new line
         sys.stdout.write(f"$ {_LAST_COMPLETION_TEXT}")
         sys.stdout.flush()
 
+    # Reset counter if it goes beyond 2 to prepare for the next command
     if _TAB_PRESSED_COUNT > 2:
         _TAB_PRESSED_COUNT = 0
 
+
 def setup_readline():
     """Configures readline for autocompletion."""
-    # Set the custom completer function
     readline.set_completer(shell_completer)
-    
-    # Set the custom display hook for when multiple matches are found
     readline.set_completion_display_matches_hook(display_matches_hook)
-    
-    # Configure readline to automatically use the completer function on Tab press
     readline.parse_and_bind("tab: complete")
-    
-    # We need to tell readline to list the possibilities immediately on a second TAB press.
-    # We'll rely on the hook logic above instead of relying on default settings.
-    # The hook fires when readline decides it can't complete the word.
 
 
 # --- End of Autocompletion Logic ---
 
-
-# (The rest of the code remains the same, only the readline related functions are updated)
 
 """Searches for an executable in all directories listed in PATH.
 Returns the full path if found and executable, otherwise None."""
@@ -139,14 +131,15 @@ def write_output(text, stdout_redirect=None, stderr_redirect=None, append=False)
         os.makedirs(os.path.dirname(stdout_redirect), exist_ok=True)
         mode = "a" if append else "w"
         with open(stdout_redirect, mode) as f:
-            # Add newline only if not already present
-            f.write(text + ("\n" if not text.endswith("\n") else ""))
+            text = text + ("\n" if not text.endswith("\n") else "")
+            f.write(text)
         return
     elif stderr_redirect:
         os.makedirs(os.path.dirname(stderr_redirect), exist_ok=True)
         mode = "a" if append else "w"
         with open(stderr_redirect, mode) as f:
-            f.write(text + ("\n" if not text.endswith("\n") else ""))
+            text = text + ("\n" if not text.endswith("\n") else "")
+            f.write(text)
         return
     else:
         print(text, flush=True)
@@ -157,7 +150,6 @@ def main():
     
     while True:
         try:
-            # Note: Using input() here allows the readline setup to manage the prompt ($)
             command = input("$ ").strip() 
         except EOFError:
             break
