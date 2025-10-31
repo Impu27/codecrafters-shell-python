@@ -161,60 +161,148 @@ def write_output(text, stdout_redirect=None, stderr_redirect=None, append=False)
     else:
         print(text, flush=True)
 
+
 def main():
     setup_readline()
     
     while True:
         try:
             command = input("$ ").strip() 
-        except EOFError: break
-        except KeyboardInterrupt: sys.stdout.write("\n"); continue
+        except EOFError:
+            break
+        except KeyboardInterrupt:
+            sys.stdout.write("\n")
+            continue
 
-        if command == "": continue
-        try: parts = shlex.split(command)
-        except ValueError as e: print(f"Error parsing command: {e}"); continue
-        if not parts: continue
+        if command == "":
+            continue
+        try:
+            parts = shlex.split(command)
+        except ValueError as e:
+            print(f"Error parsing command: {e}")
+            continue
+        if not parts:
+            continue
         
         # Reset TAB counter after a command is executed
         global _TAB_PRESSED_COUNT
         _TAB_PRESSED_COUNT = 0 
         
-        stdout_redirect = None; stderr_redirect = None
-        stdout_append = False; stderr_append = False  
+        stdout_redirect = None
+        stderr_redirect = None
+        stdout_append = False  
+        stderr_append = False  
         tokens_to_remove = []
 
-        # --- Redirection Logic (truncated for display) ---
-        if "2>>" in parts: op_index = parts.index("2>>"); 
-        # ... redirection handling ...
-        if "2>" in parts: op_index = parts.index("2>");
-        # ... redirection handling ...
-        if ">>" in parts or "1>>" in parts: op_index = parts.index("1>>") if "1>>" in parts else parts.index(">>");
-        # ... redirection handling ...
-        elif ">" in parts or "1>" in parts: op_index = parts.index("1>") if "1>" in parts else parts.index(">");
-        # ... redirection handling ...
+        # --- Redirection Logic (omitted for brevity, remains unchanged) ---
+        if "2>>" in parts:
+            op_index = parts.index("2>>")
+            if op_index + 1 < len(parts):
+                stderr_redirect = parts[op_index + 1]
+                stderr_append = True 
+                tokens_to_remove.extend([op_index, op_index + 1])
+            else:
+                print("syntax error: no file after redirection operator")
+                continue
+        elif "2>" in parts:
+            op_index = parts.index("2>")
+            if op_index + 1 < len(parts):
+                stderr_redirect = parts[op_index + 1]
+                tokens_to_remove.extend([op_index, op_index + 1])
+            else:
+                print("syntax error: no file after redirection operator")
+                continue
+        if ">>" in parts or "1>>" in parts:
+            if "1>>" in parts:
+                op_index = parts.index("1>>")
+            else:
+                op_index = parts.index(">>")
+            if op_index + 1 < len(parts):
+                stdout_redirect = parts[op_index + 1]
+                stdout_append = True
+                tokens_to_remove.extend([op_index, op_index + 1])
+            else:
+                print("syntax error: no file after redirection operator")
+                continue
+        elif ">" in parts or "1>" in parts:
+            op_index = parts.index("1>") if "1>" in parts else parts.index(">")
+            if op_index + 1 < len(parts):
+                stdout_redirect = parts[op_index + 1]
+                tokens_to_remove.extend([op_index, op_index + 1])
+            else:
+                print("syntax error: missing file after >")
+                continue
                 
-        if tokens_to_remove: tokens_to_remove.sort(reverse=True); 
-        # ... token removal ...
+        if tokens_to_remove:
+            tokens_to_remove.sort(reverse=True)
+            for index in tokens_to_remove:
+                parts.pop(index)
 
-        if not parts: continue
+        if not parts:
+            continue
         cmd = parts[0]
 
-        # --- File and Directory Setup (truncated for display) ---
-        # ... file setup logic ...
+        # --- File and Directory Setup (omitted for brevity, remains unchanged) ---
+        if stdout_redirect:
+            if os.path.dirname(stdout_redirect):
+                 os.makedirs(os.path.dirname(stdout_redirect), exist_ok=True)
+            if not stdout_append:
+                try: open(stdout_redirect, "w").close()
+                except Exception as e:
+                    print(f"shell: failed to create file {stdout_redirect}: {e}"); continue
+        if stderr_redirect:
+            if os.path.dirname(stderr_redirect):
+                 os.makedirs(os.path.dirname(stderr_redirect), exist_ok=True)
+            if not stderr_append: 
+                try: open(stderr_redirect, "w").close()
+                except Exception as e:
+                    print(f"shell: failed to create file {stderr_redirect}: {e}"); continue
 
-        # --- Handle builtins (truncated for display) ---
-        if cmd == "exit": 
-        # ... exit logic ...
-        if cmd == "echo": 
-        # ... echo logic ...
+        # --- Handle builtins (omitted for brevity, remains unchanged) ---
+        if cmd == "exit":
+            exit_code = 0
+            if len(parts) > 1:
+                try: exit_code = int(parts[1])
+                except ValueError: exit_code = 1
+            sys.exit(exit_code)
+
+        if cmd == "echo":
+            msg = " ".join(parts[1:])
+            if stdout_redirect:
+                mode = "a" if stdout_append else "w"
+                with open(stdout_redirect, mode) as f: f.write(msg + ("\n" if not msg.endswith("\n") else ""))
+            else:
+                print(msg, flush=True)
+            continue
+
         if cmd == 'type':
-        # ... type logic ...
-        if cmd == "pwd": 
-        # ... pwd logic ...
-        if cmd == "cd":
-        # ... cd logic ...
+            if len(parts) < 2: continue
+            target = parts[1]
+            if target in BUILTIN_COMMANDS: output = f"{target} is a shell builtin"
+            else:
+                path = find_executable(target)
+                if path: output = f"{target} is {path}"
+                else: output = f"{target}: not found"
+            write_output(output, stdout_redirect, stderr_redirect, stdout_append) 
+            continue
 
-        # --- Handle external programs (truncated for display) ---
+        if cmd == "pwd":
+            current_directory = os.getcwd()
+            write_output(current_directory, stdout_redirect, stderr_redirect, stdout_append)
+            continue
+
+        if cmd == "cd":
+            if len(parts) < 2: continue
+            target_dir = parts[1]
+            if target_dir == "~" or target_dir.startswith("~/"): target_dir = os.path.expanduser(target_dir)
+            if not os.path.isdir(target_dir):
+                print(f"cd: {target_dir}: No such file or directory"); continue
+            try: os.chdir(target_dir)
+            except Exception as e: print(f"cd: {target_dir}: {e}")
+            continue
+
+
+        # --- Handle external programs (omitted for brevity, remains unchanged) ---
         full_path = find_executable(cmd)
         if full_path:
             try:
@@ -229,8 +317,10 @@ def main():
 
                 if stdout_target: stdout_target.close()
                 if stderr_target: stderr_target.close()
-            except Exception as e: print(f"Error executing {cmd}: {e}")
+            except Exception as e:
+                print(f"Error executing {cmd}: {e}")
             continue
+
 
         # PRINT for Unknown command
         print(f"{command}: command not found")
