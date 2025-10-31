@@ -15,6 +15,19 @@ def find_executable(program):
     return None
 
 
+def write_output(text, stdout_redirect=None, stderr_redirect=None, append=False):
+    """Writes text to stdout/stderr redirection targets, or prints normally."""
+    if stderr_redirect:
+        with open(stderr_redirect, "w") as f:
+            f.write(text + "\n")
+    elif stdout_redirect:
+        mode = "a" if append else "w"
+        with open(stdout_redirect, mode) as f:
+            f.write(text + "\n")
+    else:
+        print(text)
+
+
 def main():
     while True:
         # READ
@@ -39,6 +52,8 @@ def main():
             parts = shlex.split(command)
         except ValueError as e:
             print(f"Error parsing command: {e}")
+            continue
+        if not parts:
             continue
         cmd = parts[0]
 
@@ -112,12 +127,7 @@ def main():
         # --- Handle 'echo' command ---
         if cmd == "echo":
             echo_str = " ".join(parts[1:])
-            if stdout_redirect:
-                mode = "a" if stdout_append else "w"
-                with open(stdout_redirect, mode) as f:
-                    f.write(echo_str + "\n")
-            else:
-                print(echo_str)
+            write_output(echo_str, stdout_redirect, stderr_redirect, stdout_append)
             continue
 
 
@@ -137,24 +147,14 @@ def main():
                     output = f"{target} is {path}"
                 else:
                     output = f"{target}: not found"
-            if stdout_redirect:
-                mode = "a" if stdout_append else "w"
-                with open(stdout_redirect, mode) as f:
-                    f.write(output + "\n")
-            else:
-                print(output)
+            write_output(output, stdout_redirect, stderr_redirect, stdout_append)
             continue
 
 
         # --- Handle 'pwd' comment ---
         if cmd == "pwd":
             current_directory = os.getcwd()
-            if stdout_redirect:
-                mode = "a" if stdout_append else "w"
-                with open(stdout_redirect, mode) as f:
-                    f.write(current_directory + "\n")
-            else:
-                print(current_directory)
+            write_output(current_directory, stdout_redirect, stderr_redirect, stdout_append)
             continue
 
 
@@ -196,7 +196,7 @@ def main():
                     stderr_target = open(stderr_redirect, "w")
 
                 subprocess.run(
-                    [full_path] + parts[1:],
+                    [full_path] + parts[1:], # use full executable path
                     stdout=stdout_target or sys.stdout,
                     stderr=stderr_target or sys.stderr
                 )
