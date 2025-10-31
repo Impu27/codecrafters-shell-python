@@ -196,7 +196,7 @@ def main():
                     stderr_target = open(stderr_redirect, "w")
 
                 subprocess.run(
-                    parts,
+                    [full_path] + parts[1:],
                     stdout=stdout_target or sys.stdout,
                     stderr=stderr_target or sys.stderr
                 )
