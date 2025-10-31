@@ -2,6 +2,40 @@ import sys
 import os
 import subprocess
 import shlex
+import readline # <--- NEW IMPORT
+
+
+# --- 1. Autocompletion Logic ---
+BUILTIN_COMMANDS = ["exit", "echo", "type", "pwd", "cd"] # List of commands to complete
+
+def shell_completer(text, state):
+    """
+    Custom completer function for readline.
+    'text' is the word currently being typed by the user (e.g., 'ech').
+    'state' is used by readline to get multiple matches (0 for the first, 1 for the second, etc.).
+    """
+    
+    # Filter the list of built-in commands to find matches
+    matches = [cmd for cmd in BUILTIN_COMMANDS if cmd.startswith(text)]
+    
+    # readline calls this function repeatedly, incrementing 'state'.
+    # When state is 0, return the first match. When state is 1, return the second, and so on.
+    if state < len(matches):
+        # The tester explicitly requires a space after the completed command.
+        return matches[state] + " "
+    else:
+        return None # No more matches found
+
+def setup_readline():
+    """Configures readline for autocompletion."""
+    # Set the custom completer function
+    readline.set_completer(shell_completer)
+    
+    # Configure readline to automatically use the completer function on Tab press
+    # 'tab: complete' is the standard binding for Tab to initiate completion
+    readline.parse_and_bind("tab: complete")
+
+# --- End of Autocompletion Logic ---
 
 
 """Searches for an executable in all directories listed in PATH.
@@ -26,10 +60,7 @@ def write_output(text, stdout_redirect=None, stderr_redirect=None, append=False)
             f.write(text + ("\n" if not text.endswith("\n") else ""))
         return
     elif stderr_redirect:
-        # --- UPDATE FOR STAGE 2>> ---
-        # If a built-in's *error* is being written, use stderr_redirect
         os.makedirs(os.path.dirname(stderr_redirect), exist_ok=True)
-        # Use append mode ('a') if the append flag is True, otherwise use overwrite ('w').
         mode = "a" if append else "w"
         with open(stderr_redirect, mode) as f:
             f.write(text + ("\n" if not text.endswith("\n") else ""))
@@ -39,20 +70,26 @@ def write_output(text, stdout_redirect=None, stderr_redirect=None, append=False)
 
 
 def main():
+    # --- 2. Setup Readline before the loop starts ---
+    setup_readline()
+    
     while True:
         # READ
-        sys.stdout.write("$ ")
-        sys.stdout.flush() 
+        # print() is safer than sys.stdout.write() when using readline
         try:
-            command = input().strip()
+            # readline automatically handles prompt display, input, and TAB completion
+            command = input("$ ").strip() 
         except EOFError:
             break
         except KeyboardInterrupt:
+            # Readline typically handles this more cleanly, but keep for robustness
             sys.stdout.write("\n")
             continue
 
         if command == "":
             continue
+        # --- (Rest of the command execution logic remains the same) ---
+        
         try:
             parts = shlex.split(command)
         except ValueError as e:
@@ -60,21 +97,19 @@ def main():
             continue
         if not parts:
             continue
-
-        # --- Handle output redirection early ---
+        
         stdout_redirect = None
         stderr_redirect = None
         stdout_append = False  
-        stderr_append = False  # <--- NEW FLAG for 2>>
-        
+        stderr_append = False  
         tokens_to_remove = []
 
-        # Check for stderr append redirection (2>>) <--- NEW BLOCK
+        # Check for stderr append redirection (2>>)
         if "2>>" in parts:
             op_index = parts.index("2>>")
             if op_index + 1 < len(parts):
                 stderr_redirect = parts[op_index + 1]
-                stderr_append = True # Set flag for append mode
+                stderr_append = True 
                 tokens_to_remove.extend([op_index, op_index + 1])
             else:
                 print("syntax error: no file after redirection operator")
@@ -126,7 +161,6 @@ def main():
         cmd = parts[0]
 
         # --- File and Directory Setup ---
-        # This section ensures directories exist and truncates overwrite files immediately.
         if stdout_redirect:
             if os.path.dirname(stdout_redirect):
                  os.makedirs(os.path.dirname(stdout_redirect), exist_ok=True)
@@ -140,7 +174,6 @@ def main():
         if stderr_redirect:
             if os.path.dirname(stderr_redirect):
                  os.makedirs(os.path.dirname(stderr_redirect), exist_ok=True)
-            # Only truncate for OVERWRITE (2>), not APPEND (2>>)
             if not stderr_append: 
                 try:
                     open(stderr_redirect, "w").close()
@@ -169,16 +202,14 @@ def main():
 
         if cmd == 'type':
             if len(parts) < 2: continue
-            builtin_commands = ["exit", "echo", "type", "pwd", "cd"]
             target = parts[1]
-            if target in builtin_commands:
+            if target in BUILTIN_COMMANDS:
                 output = f"{target} is a shell builtin"
             else:
                 path = find_executable(target)
                 if path: output = f"{target} is {path}"
                 else: output = f"{target}: not found"
             
-            # Note: built-in success output is stdout. We use the stdout_append flag here.
             write_output(output, stdout_redirect, stderr_redirect, stdout_append) 
             continue
 
@@ -208,11 +239,8 @@ def main():
         full_path = find_executable(cmd)
         if full_path:
             try:
-                # Open stdout target: 'a' if stdout_append, 'w' otherwise
                 stdout_target = open(stdout_redirect, "a" if stdout_append else "w") if stdout_redirect else None
                 
-                # --- UPDATE FOR STAGE 2>> ---
-                # Determine stderr mode: 'a' if stderr_append, 'w' otherwise.
                 stderr_mode = "a" if stderr_append else "w"
                 stderr_target = open(stderr_redirect, stderr_mode) if stderr_redirect else None
                 
