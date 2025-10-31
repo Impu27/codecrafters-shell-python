@@ -5,41 +5,49 @@ import shlex
 import readline 
 
 
+# --- Global State for Double-Tab Logic ---
+# Tracks the number of consecutive TAB presses for the current input word.
+_TAB_PRESSED_COUNT = 0
+# Stores the last text typed when TAB was pressed to detect changes.
+_LAST_COMPLETION_TEXT = ""
+
+
 # --- 1. Autocompletion Logic ---
-BUILTIN_COMMANDS = ["exit", "echo", "type", "pwd", "cd"] # List of commands to complete
+BUILTIN_COMMANDS = ["exit", "echo", "type", "pwd", "cd"] 
 
 def find_all_executables_with_prefix(prefix):
     """
     Searches all directories in PATH for executable files starting with the given prefix.
     """
     path_dirs = os.environ.get("PATH", "").split(os.pathsep)
-    matches = set() # Use a set to avoid duplicates
+    matches = set()
 
     for directory in path_dirs:
-        # Handle cases where PATH includes non-existent directories gracefully
         if not os.path.isdir(directory):
             continue
             
         try:
-            # List all entries in the directory
             for item_name in os.listdir(directory):
-                # Check if the item starts with the prefix
                 if item_name.startswith(prefix):
                     full_path = os.path.join(directory, item_name)
-                    # Check if the item is a regular file AND is executable
                     if os.path.isfile(full_path) and os.access(full_path, os.X_OK):
                         matches.add(item_name)
         except OSError:
-            # Ignore directories we can't read
             continue
             
-    return sorted(list(matches)) # Return a sorted list of unique external commands
+    return sorted(list(matches))
 
 
 def shell_completer(text, state):
     """
-    Custom completer function for readline.
+    Custom completer function for readline. Returns matches without printing the list.
     """
+    global _TAB_PRESSED_COUNT, _LAST_COMPLETION_TEXT
+
+    # Logic to reset the TAB counter if the user started typing a new word
+    if text != _LAST_COMPLETION_TEXT:
+        _TAB_PRESSED_COUNT = 0
+    _LAST_COMPLETION_TEXT = text
     
     # 1. Check Built-ins
     builtin_matches = [cmd for cmd in BUILTIN_COMMANDS if cmd.startswith(text)]
@@ -50,26 +58,68 @@ def shell_completer(text, state):
     # 3. Combine and sort all matches
     all_matches = sorted(list(set(builtin_matches + external_matches)))
     
-    # 4. Handle Bell Character (if no matches are found)
-    if not all_matches and state == 0:
-        sys.stdout.write('\x07')
-        sys.stdout.flush()
-        return None
-    
-    # 5. Return the match based on the state
+    # The default readline behavior will print the bell/list if we return multiple matches.
+    # We must return *all* matches here, and let the hook handle the display logic.
     if state < len(all_matches):
-        # Return the completed command plus a space
-        return all_matches[state] + " "
+        return all_matches[state]
     else:
-        return None # No more matches found
+        return None
+
+
+def display_matches_hook(substitution_text, matches, longest_match_length):
+    """
+    Custom hook to handle the display of multiple matches (on double-tab).
+    """
+    global _TAB_PRESSED_COUNT, _LAST_COMPLETION_TEXT
+    
+    # The hook is only called if multiple matches exist and are ambiguous.
+    _TAB_PRESSED_COUNT += 1
+    
+    if _TAB_PRESSED_COUNT == 1:
+        # First TAB press: Ring the bell.
+        sys.stdout.write('\a') # Bell character
+        sys.stdout.flush()
+        # Keep the prompt as is (readline automatically redraws the current line).
+        
+    elif _TAB_PRESSED_COUNT == 2:
+        # Second TAB press: Print the list, separated by 2 spaces.
+        
+        # 1. Clear the current line so the list can be printed cleanly
+        sys.stdout.write('\n')
+        
+        # 2. Print the matches list separated by 2 spaces
+        list_output = "  ".join(matches)
+        print(list_output) 
+        
+        # 3. Print the prompt again, followed by the original text
+        sys.stdout.write(f"$ {_LAST_COMPLETION_TEXT}")
+        sys.stdout.flush()
+
+    # Reset counter for safety if it goes beyond 2, though readline usually handles this.
+    if _TAB_PRESSED_COUNT > 2:
+        _TAB_PRESSED_COUNT = 0
+
 
 def setup_readline():
     """Configures readline for autocompletion."""
+    # Set the custom completer function
     readline.set_completer(shell_completer)
+    
+    # Set the custom display hook for when multiple matches are found
+    readline.set_completion_display_matches_hook(display_matches_hook)
+    
+    # Configure readline to automatically use the completer function on Tab press
     readline.parse_and_bind("tab: complete")
+    
+    # We need to tell readline to list the possibilities immediately on a second TAB press.
+    # We'll rely on the hook logic above instead of relying on default settings.
+    # The hook fires when readline decides it can't complete the word.
+
 
 # --- End of Autocompletion Logic ---
 
+
+# (The rest of the code remains the same, only the readline related functions are updated)
 
 """Searches for an executable in all directories listed in PATH.
 Returns the full path if found and executable, otherwise None."""
@@ -107,6 +157,7 @@ def main():
     
     while True:
         try:
+            # Note: Using input() here allows the readline setup to manage the prompt ($)
             command = input("$ ").strip() 
         except EOFError:
             break
@@ -123,6 +174,10 @@ def main():
             continue
         if not parts:
             continue
+        
+        # Reset TAB counter after a command is executed
+        global _TAB_PRESSED_COUNT
+        _TAB_PRESSED_COUNT = 0 
         
         stdout_redirect = None
         stderr_redirect = None
