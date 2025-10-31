@@ -164,9 +164,11 @@ def main():
         # --- Handle 'echo' command ---
         if cmd == "echo":
             msg = " ".join(parts[1:])
-            # Handle quoting (Note: shlex.split usually handles this, but keeping logic for robustness)
-            if (msg.startswith("'") and msg.endswith("'")) or (msg.startswith('"') and msg.endswith('"')):
-                msg = msg[1:-1]
+            
+            # FIX: REMOVE THE MANUAL QUOTE STRIPPING.
+            # shlex.split should handle the quotes correctly.
+            # if (msg.startswith("'") and msg.endswith("'")) or (msg.startswith('"') and msg.endswith('"')):
+            #     msg = msg[1:-1]
 
             # Echo's normal output is always stdout. 
             # It redirects only if stdout_redirect is set.
