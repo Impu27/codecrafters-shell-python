@@ -121,9 +121,7 @@ def main():
         cmd = parts[0]
 
         # --- FIX: Ensure redirection files/directories exist for all commands (especially built-ins) ---
-        # The file needs to be created/truncated immediately when a redirection is specified.
         if stdout_redirect:
-            # Handle directory creation for stdout redirection
             if os.path.dirname(stdout_redirect):
                  os.makedirs(os.path.dirname(stdout_redirect), exist_ok=True)
             # For overwrite (> or 1>), explicitly create the file here to ensure it exists and is truncated.
@@ -135,7 +133,6 @@ def main():
                     continue
                  
         if stderr_redirect:
-            # Handle directory creation for stderr redirection (2>)
             if os.path.dirname(stderr_redirect):
                  os.makedirs(os.path.dirname(stderr_redirect), exist_ok=True)
             try:
@@ -148,37 +145,27 @@ def main():
         # --- Handle builtins ---
         # --- Handle 'exit' command ---
         if cmd == "exit":
-            #default exit code = 0
             exit_code = 0
-            # If user gave an argument like 'exit 1'
             if len(parts) > 1:
                 try:
                     exit_code = int(parts[1])
                 except ValueError:
-                    # If not a valid number, default to 1 (error)
                     exit_code = 1
-            # Exit the shell immediately
             sys.exit(exit_code)
 
 
-        # --- Handle 'echo' command ---
+        # --- Handle 'echo' command (Quote Stripping REMOVED) ---
         if cmd == "echo":
             msg = " ".join(parts[1:])
             
-            # FIX: REMOVE THE MANUAL QUOTE STRIPPING.
-            # shlex.split should handle the quotes correctly.
-            # if (msg.startswith("'") and msg.endswith("'")) or (msg.startswith('"') and msg.endswith('"')):
-            #     msg = msg[1:-1]
+            # The manual quote stripping logic was removed to fix Stage #YT5.
 
             # Echo's normal output is always stdout. 
-            # It redirects only if stdout_redirect is set.
             if stdout_redirect:
-                # Directory is already created above
                 mode = "a" if stdout_append else "w"
                 with open(stdout_redirect, mode) as f:
                     f.write(msg + ("\n" if not msg.endswith("\n") else ""))
             else:
-                # No stdout redirection (including when only stderr is redirected) → normal print
                 print(msg, flush=True)
             continue
 
@@ -189,19 +176,14 @@ def main():
                 continue
             builtin_commands = ["exit", "echo", "type", "pwd", "cd"]
             target = parts[1]
-            # 1) Check if it's a builtin
             if target in builtin_commands:
                 output = f"{target} is a shell builtin"
-            # 2) Otherwise, check in PATH
             else:
                 path = find_executable(target)
                 if path:
                     output = f"{target} is {path}"
                 else:
                     output = f"{target}: not found"
-            
-            # Note: The existing write_output correctly handles stdout/stderr redirection for type/pwd 
-            # because 'type' only produces stdout output or an error printed to sys.stdout/sys.stderr.
             write_output(output, stdout_redirect, stderr_redirect, stdout_append)
             continue
 
@@ -215,14 +197,11 @@ def main():
 
         # --- Handle 'cd' comment ---
         if cmd == "cd":
-            # Check if argument is provided
             if len(parts) < 2:
                 continue
             target_dir = parts[1]
-            # Handle '~' expansion first
             if target_dir == "~" or target_dir.startswith("~/"):
                 target_dir = os.path.expanduser(target_dir)
-            # Check if the directory exists
             if not os.path.isdir(target_dir):
                 print(f"cd: {target_dir}: No such file or directory")
                 continue
@@ -238,33 +217,26 @@ def main():
         full_path = find_executable(cmd)
         if full_path:
             try:
-                # Note: Directories were already created above, but opening the files here 
-                # will truncate/append correctly based on the settings.
-                
-                # Open files for redirection
-                # Mode 'a' for append (>>), 'w' for overwrite (>, 2>)
                 stdout_target = open(stdout_redirect, "a" if stdout_append else "w") if stdout_redirect else None
                 stderr_target = open(stderr_redirect, "w") if stderr_redirect else None
                 
-                # If stdout was set for overwrite (and thus created/truncated above) but no file was opened here 
-                # (e.g. stdout_redirect was None), it would default to sys.stdout. This is correct.
-                # If a file was opened here, it handles the output correctly.
+                # --- FIX FOR STAGE #IP1 ---
+                # Pass the simple command name (cmd) as the first argument in the list (argv[0]),
+                # and use the 'executable' parameter to specify the full path of the program to run.
+                args_for_program = [cmd] + parts[1:] 
 
                 subprocess.run(
-                    [full_path] + parts[1:],
-                    # Redirect stdout to file object or default to sys.stdout
+                    args_for_program,  # The list of arguments, starting with 'custom_exe_9708'
+                    executable=full_path, # Tells the OS to run the found full path
                     stdout=stdout_target or sys.stdout,
-                    # Redirect stderr to file object or default to sys.stderr
                     stderr=stderr_target or sys.stderr
                 )
 
-                # Close file handles if they were opened
                 if stdout_target:
                     stdout_target.close()
                 if stderr_target:
                     stderr_target.close()
             except Exception as e:
-                # Print execution error to the shell's stderr/stdout
                 print(f"Error executing {cmd}: {e}")
             continue
 
