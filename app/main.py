@@ -138,11 +138,15 @@ def main():
         # --- Handle 'echo' command ---
         if cmd == "echo":
             echo_str = " ".join(parts[1:])
+            # Remove surrounding quotes (Codecrafters expects no quotes in output)
+            if (echo_str.startswith("'") and echo_str.endswith("'")) or (echo_str.startswith('"') and echo_str.endswith('"')):
+                echo_str = echo_str[1:-1]
+
             if stderr_redirect:
-                # If there's an explicit 2> redirection, write to stderr file
+                # Write to stderr redirection file
                 write_output(echo_str, None, stderr_redirect, stdout_append)
             else:
-                # Otherwise, normal stdout (handles > or >> as usual)
+                # Normal stdout (handles > or >>)
                 write_output(echo_str, stdout_redirect, None, stdout_append)
             continue
 
