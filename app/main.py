@@ -108,9 +108,18 @@ def display_matches_hook(substitution_text, matches, longest_match_length):
         sys.stdout.flush()
 
     elif _TAB_PRESSED_COUNT == 2:
-        # Second TAB → print all matches (space-separated), then redraw prompt
-        sys.stdout.write('\n')  # new line
-        sys.stdout.write("  ".join(sorted(matches)) + '\n')
+        
+        # Sort the matches explicitly as required by the tester (xyz_baz, xyz_qux, xyz_quz)
+        sorted_matches = sorted(matches)
+        list_output = "  ".join(sorted_matches)
+        
+        # 1. Print a newline to move the cursor below the current input line
+        sys.stdout.write('\n')
+        
+        # 2. Print the list of matches followed by a newline
+        sys.stdout.write(list_output + '\n')
+        
+        # 3. CRITICAL: Manually redraw the prompt and the current input line.
         sys.stdout.write(f"$ {_LAST_COMPLETION_TEXT}")
         sys.stdout.flush()
 
