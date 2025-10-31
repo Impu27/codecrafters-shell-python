@@ -20,17 +20,23 @@ def write_output(text, stdout_redirect=None, stderr_redirect=None, append=False)
     if stderr_redirect:
         # Always overwrite for stderr redirection (like `2>`)
         with open(stderr_redirect, "w") as f:
-            f.write(text + "\n")
+            f.write(text)
+            if not text.endswith("\n"):
+                f.write("\n")
             f.flush()
             os.fsync(f.fileno())
+        return
     elif stdout_redirect:
         mode = "a" if append else "w"
         with open(stdout_redirect, mode) as f:
-            f.write(text + "\n")
+            f.write(text)
+            if not text.endswith("\n"):
+                f.write("\n")
             f.flush()
             os.fsync(f.fileno())
+        return
     else:
-        print(text)
+        print(text, flush=True)
 
 
 def main():
