@@ -94,37 +94,29 @@ def display_matches_hook(substitution_text, matches, longest_match_length):
     Custom hook to handle the display of multiple ambiguous matches (bell/list).
     """
     global _TAB_PRESSED_COUNT, _LAST_COMPLETION_TEXT
-    
-    # Reset logic: If the current input is different from the last time TAB was pressed, reset.
+
+    # Reset counter if input changed
     if substitution_text != _LAST_COMPLETION_TEXT:
         _TAB_PRESSED_COUNT = 0
-    
-    # This needs to be captured from the completer's input
-    _LAST_COMPLETION_TEXT = substitution_text 
+
+    _LAST_COMPLETION_TEXT = substitution_text
     _TAB_PRESSED_COUNT += 1
-    
-    # 1. First TAB press: Ring the bell.
+
     if _TAB_PRESSED_COUNT == 1:
+        # First TAB → just ring bell
         sys.stdout.write('\a')
         sys.stdout.flush()
-        
-    # 2. Second TAB press: Print the list and redraw the prompt.
+
     elif _TAB_PRESSED_COUNT == 2:
-        
-        # Print a newline to move the cursor below the current input line
-        sys.stdout.write('\n')
-        
-        # Print the list of matches separated by 2 spaces, followed by a newline
-        # The order in `matches` here is guaranteed by the completer's sort logic.
-        list_output = "  ".join(matches)
-        sys.stdout.write(list_output + '\n') 
-        
-        # CRITICAL FIX: Instruct readline to redraw its own prompt and input line
-        # This is reliable for testers capturing standard output.
-        readline.redisplay()
+        # Second TAB → print all matches (space-separated), then redraw prompt
+        sys.stdout.write('\n')  # new line
+        sys.stdout.write("  ".join(sorted(matches)) + '\n')
+        sys.stdout.write(f"$ {_LAST_COMPLETION_TEXT}")
+        sys.stdout.flush()
 
     if _TAB_PRESSED_COUNT > 2:
         _TAB_PRESSED_COUNT = 0
+
 
 
 def setup_readline():
