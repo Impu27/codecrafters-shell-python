@@ -16,14 +16,19 @@ def find_executable(program):
 
 
 def write_output(text, stdout_redirect=None, stderr_redirect=None, append=False):
-    """Writes text to stdout/stderr redirection targets, or prints normally."""
+    """Writes text to appropriate stream or file for redirection."""
     if stderr_redirect:
+        # Always overwrite for stderr redirection (like `2>`)
         with open(stderr_redirect, "w") as f:
             f.write(text + "\n")
+            f.flush()
+            os.fsync(f.fileno())
     elif stdout_redirect:
         mode = "a" if append else "w"
         with open(stdout_redirect, mode) as f:
             f.write(text + "\n")
+            f.flush()
+            os.fsync(f.fileno())
     else:
         print(text)
 
