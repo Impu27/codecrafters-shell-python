@@ -16,16 +16,22 @@ def find_executable(program):
 
 
 def write_output(text, stdout_redirect=None, stderr_redirect=None, append=False):
-    """Writes text to redirected file or prints to stdout."""
-    if stderr_redirect:
-        os.makedirs(os.path.dirname(stderr_redirect), exist_ok=True)
-        with open(stderr_redirect, "w") as f:
-            f.write(text + ("\n" if not text.endswith("\n") else ""))
-        return
-    elif stdout_redirect:
+    """Writes text to redirected file or prints to stdout. 
+    This is typically used for builtin commands' output (stdout)."""
+    if stdout_redirect:
         os.makedirs(os.path.dirname(stdout_redirect), exist_ok=True)
         mode = "a" if append else "w"
         with open(stdout_redirect, mode) as f:
+            # Add newline only if not already present
+            f.write(text + ("\n" if not text.endswith("\n") else ""))
+        return
+    elif stderr_redirect:
+        # Note: write_output is designed for stdout. If a built-in has an error
+        # it should print to sys.stderr or handle it separately.
+        # This branch is kept for consistency with the provided template,
+        # but built-ins should generally not route their *normal* output here.
+        os.makedirs(os.path.dirname(stderr_redirect), exist_ok=True)
+        with open(stderr_redirect, "w") as f:
             f.write(text + ("\n" if not text.endswith("\n") else ""))
         return
     else:
@@ -66,17 +72,21 @@ def main():
         stdout_redirect = None
         stderr_redirect = None
         stdout_append = False  # track if it's append mode
-        #Check for stderr
+        
+        # Keep track of which indices to remove
+        tokens_to_remove = []
+
+        # Check for stderr redirection (2>)
         if "2>" in parts:
             op_index = parts.index("2>")
             if op_index + 1 < len(parts):
                 stderr_redirect = parts[op_index + 1]
-                parts = parts[:op_index] #remove redirection tokens
+                tokens_to_remove.extend([op_index, op_index + 1])
             else:
                 print("syntax error: no file after redirection operator")
                 continue
 
-        # --- Handle stdout redirection (overwrite & append) ---
+        # Handle stdout redirection (overwrite & append)
         # 1. Detect append redirection first (>> or 1>>)
         if ">>" in parts or "1>>" in parts:
             if "1>>" in parts:
@@ -87,7 +97,7 @@ def main():
             if op_index + 1 < len(parts):
                 stdout_redirect = parts[op_index + 1]
                 stdout_append = True  # enable append mode
-                parts = parts[:op_index]  # remove tokens
+                tokens_to_remove.extend([op_index, op_index + 1])
             else:
                 print("syntax error: no file after redirection operator")
                 continue
@@ -97,11 +107,17 @@ def main():
             op_index = parts.index("1>") if "1>" in parts else parts.index(">")
             if op_index + 1 < len(parts):
                 stdout_redirect = parts[op_index + 1]
-                parts = parts[:op_index]
+                tokens_to_remove.extend([op_index, op_index + 1])
             else:
                 print("syntax error: missing file after >")
                 continue
-
+                
+        # Remove redirection tokens from the parts list
+        # Remove them in reverse order to keep indices correct
+        if tokens_to_remove:
+            tokens_to_remove.sort(reverse=True)
+            for index in tokens_to_remove:
+                parts.pop(index)
 
         if not parts:
             continue
@@ -127,21 +143,20 @@ def main():
         # --- Handle 'echo' command ---
         if cmd == "echo":
             msg = " ".join(parts[1:])
+            # Handle quoting (Note: shlex.split usually handles this, but keeping logic for robustness)
             if (msg.startswith("'") and msg.endswith("'")) or (msg.startswith('"') and msg.endswith('"')):
                 msg = msg[1:-1]
 
-            # If output is redirected, write to that file only (not print)
-            if stderr_redirect:
-                os.makedirs(os.path.dirname(stderr_redirect), exist_ok=True)
-                with open(stderr_redirect, "w") as f:
-                    f.write(msg + ("\n" if not msg.endswith("\n") else ""))
-            elif stdout_redirect:
+            # FIX HERE: Echo's normal output is always stdout. 
+            # It should only redirect to a file if stdout_redirect is set.
+            # If only stderr_redirect (2>) is set, the output prints normally.
+            if stdout_redirect:
                 os.makedirs(os.path.dirname(stdout_redirect), exist_ok=True)
                 mode = "a" if stdout_append else "w"
                 with open(stdout_redirect, mode) as f:
                     f.write(msg + ("\n" if not msg.endswith("\n") else ""))
             else:
-                # No redirection → normal print
+                # No stdout redirection → normal print
                 print(msg, flush=True)
             continue
 
@@ -177,7 +192,6 @@ def main():
         if cmd == "cd":
             # Check if argument is provided
             if len(parts) < 2:
-                # No path given (optional for later stages)
                 # Usually defaults to the home directory, but we’ll skip that for now
                 continue
             target_dir = parts[1]
@@ -186,6 +200,8 @@ def main():
                 target_dir = os.path.expanduser(target_dir)
             # Check if the directory exists
             if not os.path.isdir(target_dir):
+                # Note: cd errors should go to stderr, but for this stage, printing to stdout/sys.stdout is often accepted.
+                # Since no stderr redirection is implemented here, we use print.
                 print(f"cd: {target_dir}: No such file or directory")
                 continue
             try:
@@ -200,23 +216,30 @@ def main():
         full_path = find_executable(cmd)
         if full_path:
             try:
-                os.makedirs(os.path.dirname(stdout_redirect), exist_ok=True) if stdout_redirect else None
-                os.makedirs(os.path.dirname(stderr_redirect), exist_ok=True) if stderr_redirect else None
+                # Ensure directories exist for redirection files
+                os.makedirs(os.path.dirname(stdout_redirect), exist_ok=True) if stdout_redirect and os.path.dirname(stdout_redirect) else None
+                os.makedirs(os.path.dirname(stderr_redirect), exist_ok=True) if stderr_redirect and os.path.dirname(stderr_redirect) else None
 
+                # Open files for redirection
+                # Mode 'a' for append (>>), 'w' for overwrite (>, 2>)
                 stdout_target = open(stdout_redirect, "a" if stdout_append else "w") if stdout_redirect else None
                 stderr_target = open(stderr_redirect, "w") if stderr_redirect else None
 
                 subprocess.run(
                     [full_path] + parts[1:],
+                    # Redirect stdout to file object or default to sys.stdout
                     stdout=stdout_target or sys.stdout,
+                    # Redirect stderr to file object or default to sys.stderr
                     stderr=stderr_target or sys.stderr
                 )
 
+                # Close file handles if they were opened
                 if stdout_target:
                     stdout_target.close()
                 if stderr_target:
                     stderr_target.close()
             except Exception as e:
+                # Print execution error to the shell's stderr/stdout
                 print(f"Error executing {cmd}: {e}")
             continue
 
